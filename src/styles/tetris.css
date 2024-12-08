@@ -1,0 +1,160 @@
+/* src/styles/tetris.css */
+@keyframes neonGlow {
+  0% {
+    text-shadow: 0 0 10px rgba(66, 153, 225, 0.8),
+                 0 0 20px rgba(66, 153, 225, 0.8),
+                 0 0 30px rgba(66, 153, 225, 0.8);
+  }
+  100% {
+    text-shadow: 0 0 20px rgba(66, 153, 225, 0.8),
+                 0 0 30px rgba(66, 153, 225, 0.8),
+                 0 0 40px rgba(66, 153, 225, 0.8);
+  }
+}
+
+@keyframes gridGlow {
+  0% {
+      box-shadow: 0 0 5px rgba(66, 153, 225, 0.3);
+  }
+  100% {
+      box-shadow: 0 0 15px rgba(66, 153, 225, 0.5);
+  }
+}
+
+@keyframes scorePulse {
+  0% {
+      transform: scale(1);
+  }
+  50% {
+      transform: scale(1.05);
+  }
+  100% {
+      transform: scale(1);
+  }
+}
+
+/* 기존 스타일 */
+.tetris-title {
+  animation: neonGlow 1.5s ease-in-out infinite alternate;
+}
+
+.game-card {
+  backdrop-filter: blur(12px);
+  transition: all 0.3s ease;
+}
+
+.game-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(66, 153, 225, 0.2);
+}
+
+.btn-tetris {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-tetris:hover {
+  transform: translateY(-2px);
+}
+
+.btn-tetris::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+      to bottom right,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(45deg);
+  transition: all 0.3s ease;
+}
+
+.btn-tetris:hover::after {
+  transform: rotate(45deg) translate(50%, 50%);
+}
+
+.player-card {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(66, 153, 225, 0.2);
+  transition: all 0.3s ease;
+}
+
+.player-card:hover {
+  border-color: rgba(66, 153, 225, 0.5);
+}
+
+.tetris-logo {
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+  letter-spacing: 0.1em;
+}
+
+.tetris-logo span {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+
+.tetris-logo span:hover {
+  transform: translateY(-5px);
+}
+
+/* 새로운 게임 보드 스타일 */
+.game-board {
+  animation: gridGlow 2s ease-in-out infinite alternate;
+  background: rgba(17, 24, 39, 0.9);
+  border: 2px solid rgba(66, 153, 225, 0.3);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.game-cell {
+  transition: all 0.2s ease;
+  border-radius: 2px;
+}
+
+.game-cell.active {
+  animation: cellPulse 0.5s ease infinite alternate;
+}
+
+/* 점수 표시 애니메이션 */
+.score-change {
+  animation: scorePulse 0.5s ease;
+}
+
+/* 다음 블록 프리뷰 스타일 */
+.next-piece-preview {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(66, 153, 225, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+}
+
+/* 게임 컨트롤 패널 */
+.controls-panel {
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid rgba(66, 153, 225, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.control-key {
+  display: inline-block;
+  padding: 4px 8px;
+  background: rgba(66, 153, 225, 0.1);
+  border: 1px solid rgba(66, 153, 225, 0.3);
+  border-radius: 4px;
+  font-family: monospace;
+  margin: 0 4px;
+}
+
+/* 게임 오버 효과 */
+.game-over {
+  animation: neonGlow 1s ease-in-out infinite alternate;
+  font-size: 2em;
+  font-weight: bold;
+  text-transform: uppercase;
+}
