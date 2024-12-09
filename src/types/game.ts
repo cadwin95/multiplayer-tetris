@@ -55,3 +55,14 @@ export const PIECES: Piece[] = [
 
 export const BOARD_WIDTH = 10;
 export const BOARD_HEIGHT = 20;
+
+export interface LocalGameState {
+  board: string;
+  currentPiece: string;
+  position: { x: number; y: number };
+  nextPiece: string;
+  score: number;
+  level: number;
+  lines: number;
+  isValid?: boolean;
+}
