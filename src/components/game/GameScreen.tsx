@@ -1,9 +1,11 @@
 import { Id } from "../../../convex/_generated/dataModel";
 import { useGameState } from '../../hooks/useGameState';
 import { useKeyboard } from '../../hooks/useKeyboard';
+import { useGameTimer } from '../../hooks/useGameTimer';
 import { GameBoard } from './GameBoard';
 import { NextPiece } from './NextPiece';
 import { ScoreBoard } from './ScoreBoard';
+
 
 interface GameScreenProps {
   gameId: Id<"games">;
@@ -19,6 +21,14 @@ export function GameScreen({ gameId, playerId }: GameScreenProps) {
     rotateTetrominoe,
     hardDrop
   } = useGameState(gameId);
+
+  // 자동 하강 타이머 설정
+  useGameTimer(
+    game?.status === 'playing',
+    gameId,
+    playerId,
+    currentPlayer?.gameState?.level || 1
+  );
 
   // Keyboard handlers
   const keyboardHandlers = {
