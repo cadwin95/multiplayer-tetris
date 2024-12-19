@@ -1,99 +1,73 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";  
+import { DirectionType, PieceType } from '../../convex/schema';
 import { Id } from "../../convex/_generated/dataModel";
-import { LocalGameState } from '../types/game';
 
-export function useGameState(gameId: Id<"games">) {
-  // 서버 상태
-  const game = useQuery(api.games.getGame, { gameId });
-  const players = useQuery(api.games.getPlayers, { gameId });
-  const currentPlayer = useQuery(api.games.getPlayer, { 
-    playerId: localStorage.getItem('playerId') as Id<"players"> 
-  });
-
-  // 로컬 상태
-  const [localState, setLocalState] = useState<LocalGameState | null>(null);
-  
-  // 서버 뮤테이션
-  const moveTetrominoe = useMutation(api.games.moveTetrominoe);
-  const rotateTetrominoe = useMutation(api.games.rotateTetrominoe);
-  const hardDrop = useMutation(api.games.hardDrop);
-  const pauseGame = useMutation(api.games.pauseGame);
-
-  // 서버 상태로 로컬 상태 초기화
-  useEffect(() => {
-    if (currentPlayer?.gameState) {
-      setLocalState(currentPlayer.gameState);
-    }
-  }, [currentPlayer?.gameState]);
-
-  // 로컬 이동 처리
-  const handleMove = useCallback(async (direction: 'left' | 'right' | 'down') => {
-    if (!localState) return;
-
-    // 로컬 상태 즉시 업데이트
-    const newPosition = {
-      x: localState.position.x + (direction === 'left' ? -1 : direction === 'right' ? 1 : 0),
-      y: localState.position.y + (direction === 'down' ? 1 : 0)
-    };
-
-    setLocalState(prev => ({
-      ...prev!,
-      position: newPosition,
-      isValid: undefined
-    }));
-
-    // 서버 검증
-    try {
-      await moveTetrominoe({
-        gameId,
-        playerId: localStorage.getItem('playerId') as Id<"players">,
-        direction
-      });
-    } catch (error) {
-      // 서버 검증 실패시 원래 상태로 복구
-      setLocalState(currentPlayer?.gameState || null);
-    }
-  }, [localState, gameId, moveTetrominoe, currentPlayer?.gameState]);
-
-  // 로컬 회전 처리
-  const handleRotate = useCallback(async () => {
-    if (!localState) return;
-
-    // 로컬 회전 즉시 적용
-    const rotatedPiece = rotateMatrix(localState.currentPiece);
-    setLocalState(prev => ({
-      ...prev!,
-      currentPiece: rotatedPiece,
-      isValid: undefined
-    }));
-
-    // 서버 검증
-    try {
-      await rotateTetrominoe({
-        gameId,
-        playerId: localStorage.getItem('playerId') as Id<"players">
-      });
-    } catch (error) {
-      setLocalState(currentPlayer?.gameState || null);
-    }
-  }, [localState, gameId, rotateTetrominoe, currentPlayer?.gameState]);``
-
-  return {
-    game,
-    players,
-    currentPlayer,
-    gameState: localState || currentPlayer?.gameState,
-    moveTetrominoe: handleMove,
-    rotateTetrominoe: handleRotate,
-    hardDrop,
-    pauseGame
-  };
+// Piece 타입 정의
+interface Piece {
+  type: PieceType;
+  rotation: number;
+  position: { x: number; y: number };
 }
 
-// 회전 행렬 헬퍼 함수
-function rotateMatrix(piece: string): string {
-  // 피스 회전 로직 구현
-  return piece;
+interface GameState {
+  board: string;
+  currentPiece: Piece | null;
+  nextPiece: Piece;
+  holdPiece: Piece | null;
+  score: number;
+  level: number;
+  lines: number;
+  status: 'playing' | 'paused' | 'finished' | 'waiting' | 'ready' | 'idle';
+}
+
+export function useGameState(gameId: Id<"games">, playerId: Id<"players">) {
+  const game = useQuery(api.games.getGame, { gameId });
+  const player = useQuery(api.games.getPlayer, { playerId });
+
+  const state: GameState = {
+    board: player?.board ?? "0".repeat(200),
+    currentPiece: {
+      type: (player?.currentPiece ?? 'I') as PieceType,
+      rotation: player?.rotation ?? 0,
+      position: player?.position ?? { x: 4, y: 0 }
+    },
+    nextPiece: {
+      type: (player?.nextPiece ?? 'I') as PieceType,
+      rotation: 0,
+      position: { x: 4, y: 0 }
+    },
+    holdPiece: player?.holdPiece ? {
+      type: player.holdPiece as PieceType,
+      rotation: 0,
+      position: { x: 4, y: 0 }
+    } : null,
+    score: player?.score ?? 0,
+    level: player?.level ?? 1,
+    lines: player?.lines ?? 0,
+    status: game?.status ?? 'waiting'
+  };
+
+  const moveTetrominoe = useMutation(api.games.handleGameAction);
+
+  const actions = {
+    move: async (direction: DirectionType) => {
+      try {
+        await moveTetrominoe({
+          gameId,
+          playerId,
+          action: direction
+        });
+      } catch (error) {
+        console.error('Move failed:', error);
+      }
+    }
+  };
+
+  return {
+    state,
+    error: null as Error | null,
+    isLoading: !game || !player,
+    actions
+  };
 }

@@ -1,40 +1,62 @@
 // src/pages/Home.tsx
-import { CreateGame } from "../components/lobby/CreateGame";
-import { GameList } from "../components/lobby/GameList";
+import { Link } from 'react-router-dom';
+import { NicknameInput } from '../components/auth/NicknameInput';
 import '../styles/tetris.css';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
-  return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <div className="container mx-auto px-4 md:px-8">
-        {/* 로고 섹션 */}
-        <div className="text-center pt-16 mb-16">
-          <h1 className="tetris-logo text-7xl font-extrabold mb-4">
-            <span>T</span>
-            <span>E</span>
-            <span>T</span>
-            <span>R</span>
-            <span>I</span>
-            <span>S</span>
-          </h1>
+  const [hasNickname, setHasNickname] = useState(false);
+
+  useEffect(() => {
+    const nickname = localStorage.getItem('nickname');
+    if (nickname) {
+      setHasNickname(true);
+    }
+  }, []);
+
+  const handleNicknameSubmit = (nickname: string) => {
+    localStorage.setItem('nickname', nickname);
+    setHasNickname(true);
+  };
+
+  if (!hasNickname) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="w-full max-w-md">
+          <NicknameInput onSubmit={handleNicknameSubmit} />
         </div>
+      </div>
+    );
+  }
 
-        {/* 메인 컨텐츠 */}
-        <div className="grid md:grid-cols-3 gap-8">
-          {/* Create Game 섹션 */}
-          <div className="md:col-span-1">
-            <div className="game-card bg-gray-800/50 p-8 rounded-xl border-2 border-blue-500/30">
-              <h2 className="text-2xl text-blue-400 mb-6 font-bold">Create Game</h2>
-              <CreateGame />
-            </div>
-          </div>
-
-          {/* Game List 섹션 */}
-          <div className="md:col-span-2">
-            <div className="game-card bg-gray-800/50 p-8 rounded-xl border-2 border-purple-500/30">
-              <GameList />
-            </div>
-          </div>
+  return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="space-y-6 w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Tetris</h1>
+          <p className="text-gray-400">
+            Welcome, {localStorage.getItem('nickname')}!
+          </p>
+        </div>
+        <div className="grid gap-4">
+          <Link 
+            to="/solo" 
+            className="menu-button bg-blue-500 hover:bg-blue-600"
+          >
+            Solo Play
+          </Link>
+          <Link 
+            to="/ai" 
+            className="menu-button bg-green-500 hover:bg-green-600"
+          >
+            Play vs AI
+          </Link>
+          <Link 
+            to="/multiplayer" 
+            className="menu-button bg-purple-500 hover:bg-purple-600"
+          >
+            Multiplayer
+          </Link>
         </div>
       </div>
     </div>

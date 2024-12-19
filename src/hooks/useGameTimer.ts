@@ -1,34 +1,31 @@
 // hooks/useGameTimer.ts
 import { useEffect } from 'react';
-import { Id } from "../../convex/_generated/dataModel";
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 
 export function useGameTimer(
   isPlaying: boolean,
   gameId: Id<"games">,
-  playerId: Id<"players">,
-  level: number
+  level: number,
+  isAIPlayer: boolean = false
 ) {
-  const autoDown = useMutation(api.games.autoDown);
-  
-  useEffect(() => {
-    if (!isPlaying) return;
+  const moveTetrominoe = useMutation(api.games.handleGameAction);
+  const playerId = localStorage.getItem('playerId') as Id<"players">;
 
-    // 레벨에 따른 하강 속도 계산 (ms)
-    const speed = Math.max(100, 1000 - (level - 1) * 100); // 레벨당 100ms씩 빨라짐
-    
-    const timer = setInterval(async () => {
-      try {
-        await autoDown({
+  useEffect(() => {
+    if (!isPlaying || (isAIPlayer && !playerId)) return;
+
+    if (!isAIPlayer) {
+      const interval = setInterval(async () => {
+        await moveTetrominoe({
           gameId,
           playerId,
+          action: 'down'
         });
-      } catch (error) {
-        console.error('Auto down failed:', error);
-      }
-    }, speed);
+      }, Math.max(100, 1000 - (level * 100)));
 
-    return () => clearInterval(timer);
-  }, [isPlaying, level, gameId, playerId, autoDown]);
+      return () => clearInterval(interval);
+    }
+  }, [isPlaying, gameId, level, playerId, moveTetrominoe, isAIPlayer]);
 }

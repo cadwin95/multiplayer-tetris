@@ -1,35 +1,37 @@
 // src/components/lobby/GameList.tsx
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useNavigate } from 'react-router-dom';  // 추가
+import { DbGameState } from "../../../convex/schema";
+
+interface GameListProps {
+  games: DbGameState[];
+  onJoinGame: (gameId: Id<"games">) => void;
+}
 
 function PlayerName({ playerId }: { playerId: Id<"players"> }) {
   const playerInfo = useQuery(api.games.getPlayer, { playerId });
   return (
     <div className="flex items-center space-x-2 text-gray-300">
       <div className="w-2 h-2 rounded-full bg-green-500"></div>
-      <span>{playerInfo?.name}</span>
+      <span>{playerInfo?.playerName}</span>
     </div>
   );
 }
 
-export function GameList() {
-  const games = useQuery(api.games.listGames);
-  const joinGame = useMutation(api.games.joinGame);
-  const navigate = useNavigate();  // 추가
+export function GameList({ games, onJoinGame }: GameListProps) {
+  const navigate = useNavigate();
 
-  const handleJoinGame = async (gameId: string) => {
-    const playerName = prompt("Enter your name:");
-    if (!playerName) return;
+  const handleJoinGame = async (gameId: Id<"games">) => {
+    const nickname = localStorage.getItem('nickname');
+    if (!nickname) {
+      navigate('/');
+      return;
+    }
 
     try {
-      const playerId = await joinGame({
-        gameId: gameId as Id<"games">,
-        playerName: playerName.trim()
-      });
-      localStorage.setItem('gameId', gameId);
-      localStorage.setItem('playerId', playerId);
+      await onJoinGame(gameId);
       navigate(`/game/${gameId}`);
     } catch {
       alert("Failed to join game");

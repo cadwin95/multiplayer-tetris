@@ -1,100 +1,99 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { ScoreBoard } from '../components/game/ScoreBoard';
-import { GameScreen } from '../components/game/GameScreen';
 import { useParams } from 'react-router-dom';
-import { useEffect, useState } from "react";
+import { useEffect } from 'react';
+import { WaitingRoom } from '../components/lobby/WaitingRoom';
+import { AIPlayer } from '../components/game/AIPlayer';
+import { GameScreen } from '../components/game/GameScreen';
 
 export default function Game() {
-  // URL에서 gameId 파라미터 가져오기
   const { gameId: urlGameId } = useParams();
-  const [playerId, setPlayerId] = useState<string | null>(null);
-  console.log('Game page params:', { gameId: urlGameId, playerId });  // 추가
-  // localStorage에서 playerId만 가져오기
-  useEffect(() => {
-    setPlayerId(localStorage.getItem('playerId'));
-  }, []);
-
-  const startGame = useMutation(api.games.startGame);
-  const setReady = useMutation(api.games.setReady);
-
-  const game = useQuery(
-    api.games.getGame, 
-    urlGameId ? { gameId: urlGameId as Id<"games"> } : "skip"
-  );
+  const playerId = localStorage.getItem('playerId') as Id<"players">;
   
-  const currentPlayer = useQuery(
-    api.games.getPlayer, 
-    playerId ? { playerId: playerId as Id<"players"> } : "skip"
-  );
+  const game = useQuery(api.games.getGame, { gameId: urlGameId as Id<"games"> });
+  const players = useQuery(api.games.getPlayers, { gameId: urlGameId as Id<"games"> });
+  
+  const setReady = useMutation(api.games.setReady);
+  const startGameAfterDelay = useMutation(api.games.startGameAfterDelay);
 
-  const players = useQuery(
-    api.games.getPlayers,
-    urlGameId ? { gameId: urlGameId as Id<"games"> } : "skip"
-  );
+  useEffect(() => {
+    if (game?.status === "ready") {
+      const timer = setTimeout(async () => {
+        await startGameAfterDelay({ gameId: urlGameId as Id<"games"> });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [game?.status, startGameAfterDelay, urlGameId]);
 
-  if (!urlGameId || !playerId || !game || !currentPlayer || !players) {
+  // AI 플레이어 확인 및 찾기
+  const aiPlayer = players?.find(p => p.isAI);
+  const humanPlayer = players?.find(p => p._id === playerId);
+
+  if (!game || !players) {
     return <div className="text-white text-center">Loading...</div>;
   }
 
-  const handleReady = async () => {
-    try {
-      await setReady({
-        gameId: urlGameId as Id<"games">,
-        playerId: playerId as Id<"players">
-      });
-    } catch (error) {
-      console.error("Failed to set ready:", error);
-    }
-  };
-
-  const handleStartGame = async () => {
-    try {
-      await startGame({ gameId: urlGameId as Id<"games"> });
-    } catch (error) {
-      console.error("Failed to start game:", error);
-    }
-  };
+  if (game.status === 'waiting') {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <WaitingRoom 
+          players={players.map(p => ({
+            id: p._id,
+            name: p.playerName,
+            isReady: p.isReady
+          }))}
+          currentPlayerId={playerId}
+          onReady={() => setReady({
+            gameId: urlGameId as Id<"games">,
+            playerId
+          })}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 py-8">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* ... 나머지 JSX는 동일 ... */}
-        {game.status === 'playing' ? (
-          <GameScreen 
-            gameId={urlGameId as Id<"games">} 
-            playerId={playerId as Id<"players">}
-          />
-        ) : (
-          <div className="flex justify-center items-start gap-8">
-            <div className="flex flex-col gap-6">
-              <ScoreBoard players={players.map(player => ({
-                _id: player._id,
-                name: player._id === playerId ? `${player.name} (You)` : player.name,
-                score: player.score
-              }))} />
-              
-              {game.status === "waiting" && !currentPlayer.isReady && (
-                <button 
-                  className="px-8 py-3 bg-green-500 text-white rounded-lg font-bold"
-                  onClick={handleReady}
-                >
-                  Ready
-                </button>
-              )}
+      <div className="container mx-auto px-4">
+        {/* AI 컨트롤러 */}
+        {aiPlayer && <AIPlayer gameId={urlGameId as Id<"games">} playerId={aiPlayer._id} />}
+        
+        <div className="flex gap-8 justify-center items-start">
+          {/* AI 플레이어 미니 화면 */}
+          {aiPlayer && (
+            <div className="mini-game-container">
+              <div className="mb-2">
+                <h2 className="text-lg text-white font-bold">
+                  {aiPlayer.playerName} (AI)
+                </h2>
+              </div>
+              <div className="mini-game-board">
+                <GameScreen 
+                  gameId={urlGameId as Id<"games">} 
+                  playerId={aiPlayer._id}
+                  isMinimized={true}
+                />
+              </div>
+            </div>
+          )}
 
-              {game.status === "waiting" && currentPlayer.isReady && (
-                <button 
-                  className="px-8 py-3 bg-blue-500 text-white rounded-lg font-bold"
-                  onClick={handleStartGame}
-                >
-                  Start Game
-                </button>
-              )}
+          {/* 메인 플레이어 화면 */}
+          <div className="main-game-container">
+            <div className="mb-4">
+              <h2 className="text-2xl text-white font-bold">
+                {humanPlayer?.playerName} (You)
+              </h2>
+            </div>
+            <div className="main-game-board">
+              <GameScreen 
+                gameId={urlGameId as Id<"games">} 
+                playerId={playerId}
+                isMinimized={false}
+              />
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

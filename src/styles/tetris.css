@@ -1,14 +1,12 @@
 /* src/styles/tetris.css */
 @keyframes neonGlow {
-  0% {
-    text-shadow: 0 0 10px rgba(66, 153, 225, 0.8),
-                 0 0 20px rgba(66, 153, 225, 0.8),
-                 0 0 30px rgba(66, 153, 225, 0.8);
+  from {
+    text-shadow: 0 0 10px rgba(0, 240, 255, 0.5),
+                 0 0 20px rgba(0, 240, 255, 0.3);
   }
-  100% {
-    text-shadow: 0 0 20px rgba(66, 153, 225, 0.8),
-                 0 0 30px rgba(66, 153, 225, 0.8),
-                 0 0 40px rgba(66, 153, 225, 0.8);
+  to {
+    text-shadow: 0 0 20px rgba(0, 255, 135, 0.5),
+                 0 0 30px rgba(0, 255, 135, 0.3);
   }
 }
 
@@ -35,7 +33,10 @@
 
 /* 기존 스타일 */
 .tetris-title {
-  animation: neonGlow 1.5s ease-in-out infinite alternate;
+  background: linear-gradient(to right, #00f0ff, #00ff87);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: neonGlow 2s ease-in-out infinite alternate;
 }
 
 .game-card {
@@ -104,33 +105,78 @@
 
 /* 새로운 게임 보드 스타일 */
 .game-board {
-  animation: gridGlow 2s ease-in-out infinite alternate;
-  background: rgba(17, 24, 39, 0.9);
-  border: 2px solid rgba(66, 153, 225, 0.3);
-  border-radius: 8px;
-  padding: 8px;
+  display: grid;
+  grid-template-rows: repeat(20, 30px);
+  gap: 1px;
+  background-color: #1a1a2e;
+  padding: 10px;
+  border-radius: 4px;
+  border: 2px solid #333;
 }
 
-.game-cell {
-  transition: all 0.2s ease;
-  border-radius: 2px;
+.board-row {
+  display: grid;
+  grid-template-columns: repeat(10, 30px);
+  gap: 1px;
 }
 
-.game-cell.active {
-  animation: cellPulse 0.5s ease infinite alternate;
+.board-cell {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #333;
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: background-color 0.1s;
 }
 
-/* 점수 표시 애니메이션 */
-.score-change {
-  animation: scorePulse 0.5s ease;
+.board-cell.filled {
+  background-color: #666;
 }
 
-/* 다음 블록 프리뷰 스타일 */
-.next-piece-preview {
+.board-cell.active {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 게임 정보 패널 스타일 */
+.game-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* 다음 조각 프리뷰 스타일 */
+.next-piece {
   background: rgba(17, 24, 39, 0.7);
   border: 1px solid rgba(66, 153, 225, 0.2);
   border-radius: 6px;
-  padding: 12px;
+  padding: 1rem;
+}
+
+/* 점수판 스타일 */
+.score-board {
+  background: rgba(17, 24, 39, 0.8);
+  border: 1px solid rgba(66, 153, 225, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.score-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  color: white;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .game-layout {
+    flex-direction: column;
+  }
+
+  .board-cell {
+    width: 25px;
+    height: 25px;
+  }
 }
 
 /* 게임 컨트롤 패널 */
@@ -157,4 +203,437 @@
   font-size: 2em;
   font-weight: bold;
   text-transform: uppercase;
+}
+
+/* 테트리스 게임 전용 스타일 */
+.tetris-logo {
+  background: linear-gradient(45deg, #00f0ff, #00ff87);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: neonGlow 1.5s ease-in-out infinite alternate;
+}
+
+/* 게임 레이아웃 */
+.game-screen {
+  @apply relative;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+}
+
+.game-layout {
+  display: flex;
+  gap: 2rem;
+  position: relative;
+}
+
+/* 게임 보드 */
+.game-board {
+  display: grid;
+  grid-template-rows: repeat(20, 30px);
+  gap: 1px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.board-row {
+  display: grid;
+  grid-template-columns: repeat(10, 30px);
+  gap: 1px;
+}
+
+.board-cell {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* 테트로미노 색상 */
+.board-cell.I { background: #00f0ff; }
+.board-cell.O { background: #ffd700; }
+.board-cell.T { background: #ff00ff; }
+.board-cell.S { background: #00ff00; }
+.board-cell.Z { background: #ff0000; }
+.board-cell.J { background: #0000ff; }
+.board-cell.L { background: #ff7f00; }
+
+/* 다음 조각 패널 */
+.next-piece {
+  background: rgba(0, 0, 0, 0.85);
+  padding: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  position: absolute;
+  right: -150px;
+  top: 0;
+}
+
+/* 홀드 패널 */
+.hold-piece {
+  background: rgba(0, 0, 0, 0.85);
+  padding: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  position: absolute;
+  left: -150px;
+  top: 0;
+}
+
+/* 게임 정보 */
+.game-stats {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  color: white;
+  font-family: 'Press Start 2P', monospace;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.stat-item {
+  margin: 5px 0;
+}
+
+/* 게임 오버레이 */
+.game-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-family: 'Press Start 2P', monospace;
+  text-align: center;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .game-layout {
+    transform: scale(0.8);
+  }
+}
+
+.menu-item {
+  @apply p-4 rounded-lg text-white transition-all duration-200;
+  @apply border-2 border-opacity-30;
+  @apply flex flex-col gap-1;
+  @apply transform hover:scale-[1.02];
+}
+
+.menu-item h2 {
+  @apply font-bold text-lg;
+}
+
+.menu-item:hover {
+  @apply border-opacity-50;
+}
+
+/* 메인 메뉴 스타일 */
+.main-menu-item {
+  @apply flex items-center gap-4 p-4 text-white rounded-lg;
+  @apply transition-all duration-200;
+  @apply hover:translate-x-2;
+  @apply border-l-4 border-transparent hover:border-white/30;
+}
+
+.menu-icon {
+  @apply w-16 h-16 flex items-center justify-center;
+  @apply text-2xl font-bold font-mono;
+  @apply bg-black/30 rounded-lg;
+}
+
+.menu-content {
+  @apply flex flex-col;
+}
+
+.menu-content h2 {
+  @apply text-xl font-bold tracking-wider;
+}
+
+.menu-content p {
+  @apply text-sm opacity-70;
+}
+
+.menu-button {
+  @apply flex flex-col items-center justify-center;
+  @apply px-8 py-6 rounded-lg;
+  @apply text-white font-bold;
+  @apply transition-all duration-300;
+  @apply transform hover:scale-105;
+  @apply shadow-lg hover:shadow-xl;
+}
+
+.board-cell.ghost {
+  border-style: dashed;
+  border-width: 2px;
+  opacity: 0.3;
+}
+
+.game-container {
+  @apply bg-gray-800 p-6 rounded-lg shadow-lg;
+  width: auto;
+  min-width: 800px;
+}
+
+.game-board-container {
+  @apply bg-gray-900 p-4 rounded;
+  height: 90vh;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-info {
+  @apply w-32;
+}
+
+.game-screen {
+  @apply p-8;
+}
+
+.game-panel {
+  @apply w-48 flex flex-col;
+}
+
+.game-box {
+  @apply bg-gray-800 p-4 rounded-lg border-2 border-gray-700;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+.game-label {
+  @apply text-white text-lg font-bold mb-2 tracking-wider text-center;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.piece-preview-box {
+  @apply aspect-square bg-gray-900 p-2 rounded;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+
+.game-board-wrapper {
+  @apply relative;
+  width: 400px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.game-border {
+  @apply p-2 bg-gray-900 rounded;
+  border: 2px solid rgba(255,255,255,0.1);
+}
+
+.game-grid {
+  @apply grid grid-cols-10 gap-px;
+  aspect-ratio: 1/2;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.game-cell {
+  @apply aspect-square;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.game-cell.filled {
+  @apply transition-colors duration-100;
+}
+
+.stats-display {
+  @apply text-white space-y-2;
+  font-family: 'Press Start 2P', monospace;
+}
+
+.stat-item {
+  @apply text-xs opacity-70;
+}
+
+.stat-value {
+  @apply text-lg font-bold;
+}
+
+.controls-guide {
+  @apply text-white space-y-2;
+}
+
+.control-item {
+  @apply flex justify-between items-center text-sm;
+}
+
+.control-item span:first-child {
+  @apply font-bold bg-gray-700 px-2 py-1 rounded;
+}
+
+.main-game-container {
+  @apply bg-gray-800 p-8 rounded-lg shadow-lg;
+  width: 800px;
+}
+
+.main-game-board {
+  @apply bg-gray-900 p-4 rounded;
+  height: 90vh;
+  min-height: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mini-game-container {
+  @apply bg-gray-800 p-4 rounded-lg shadow-lg;
+  width: 250px;
+}
+
+.mini-game-board {
+  @apply bg-gray-900 p-2 rounded;
+  height: 400px;
+}
+
+/* 미니 게임 보드용 스타일 */
+.game-screen.minimized {
+  @apply p-2;
+}
+
+.game-screen.minimized .game-panel {
+  @apply w-24;
+}
+
+.game-screen.minimized .game-box {
+  @apply p-2;
+}
+
+.game-screen.minimized .game-label {
+  @apply text-sm mb-1;
+}
+
+.game-screen.minimized .game-grid {
+  width: 150px;
+  height: 300px;
+}
+
+.game-screen.minimized .controls-guide {
+  display: none;
+}
+
+.game-screen.minimized .stats-display {
+  @apply text-sm;
+}
+
+.game-screen.minimized .stat-value {
+  @apply text-base;
+}
+
+.piece-preview {
+  @apply absolute;
+  width: 120px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.piece-preview.hold {
+  left: -140px;
+  top: 0;
+}
+
+.piece-preview.next {
+  right: -140px;
+  top: 0;
+}
+
+.game-stats {
+  @apply absolute bottom-0 left-0 right-0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  font-family: 'Press Start 2P', monospace;
+  text-align: center;
+}
+
+.mini-game {
+  @apply fixed top-4 right-4;
+  width: 200px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mini-game .game-grid {
+  width: 100%;
+  aspect-ratio: 1/2;
+}
+
+.ghost {
+  opacity: 0.3;
+  border-style: dashed;
+  border-width: 2px;
+}
+
+/* 게임 레이아웃 컨테이너 */
+.game-layout {
+  @apply flex justify-between items-start gap-6;
+}
+
+/* 사이드 패널 (Hold/Next) */
+.side-panel {
+  @apply w-32 flex flex-col gap-4;
+}
+
+/* Hold/Next 박스 */
+.preview-box {
+  @apply bg-gray-900 p-3 rounded-lg;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-box-title {
+  @apply text-white text-sm font-bold mb-2 text-center;
+  font-family: 'Press Start 2P', monospace;
+}
+
+/* 메인 보드 */
+.main-board {
+  @apply bg-gray-900 p-4 rounded-lg;
+  width: 400px;
+}
+
+/* 게임 그리드 */
+.game-grid {
+  @apply grid grid-cols-10 gap-px bg-black/30;
+  aspect-ratio: 1/2;
+}
+
+/* 스코어 보드 */
+.score-panel {
+  @apply mt-4 bg-gray-900 p-3 rounded-lg;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 미니 게임 컨테이너 (AI 플레이어) */
+.mini-game-container {
+  @apply bg-gray-800 p-4 rounded-lg shadow-lg;
+  width: 250px;
+}
+
+.mini-game-layout {
+  @apply flex gap-2;
+}
+
+.mini-side-panel {
+  @apply w-16;
+}
+
+.mini-board {
+  width: 150px;
+}
+
+.mini-preview-box {
+  @apply bg-gray-900 p-2 rounded-lg mb-2;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mini-preview-title {
+  @apply text-white text-xs font-bold mb-1 text-center;
+  font-family: 'Press Start 2P', monospace;
 }

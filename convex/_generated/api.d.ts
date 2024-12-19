@@ -13,8 +13,8 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as constants from "../constants.js";
 import type * as games from "../games.js";
-import type * as schemas from "../schemas.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -25,8 +25,8 @@ import type * as schemas from "../schemas.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  constants: typeof constants;
   games: typeof games;
-  schemas: typeof schemas;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

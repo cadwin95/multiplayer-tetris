@@ -1,83 +1,87 @@
+/**
+ * Game Schema Exports:
+ * 
+ * Constants:
+ * - GAME_VALUES: 게임 관련 상수 (STATUS, MODES, PIECES, DIRECTIONS, INITIAL_BOARD_SIZE, BASE_POINTS)
+ * - PIECE_ROTATIONS: 각 테트리스 조각의 회전 패턴
+ * 
+ * TypeScript:
+ * - tsValidators: 타입스크립트 타입 정의 (STATUS, MODES, PIECES, DIRECTIONS)
+ * - GameState: 게임 테이블 문서 타입 (ID 포함)
+ * - PlayerState: 플레이어 테이블 문서 타입 (ID 포함)
+ * 
+ * Convex:
+ * - convexValidators: Convex 검증을 위한 validator 객체
+ * - gameTableSchema: 게임 테이블 스키마
+ * - playerTableSchema: 플레이어 테이블 스키마
+ */
+
 // games.ts
-import { mutation, query } from "./_generated/server";
+import { mutation, query, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { Id } from "./_generated/dataModel";
-import {  MutationCtx } from "./_generated/server";
+import {    
+  tsValidators,   
+  GAME_VALUES,
+  convexValidators, 
+  PIECE_ROTATIONS, 
+  DbPlayerState
+} from "./schema";
 
-const TETROMINOS = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
-const BASE_POINTS = [0, 40, 100, 300, 1200]; // 0, 1, 2, 3, 4 라인 제거시 점수
-const GARBAGE_LINE_POINTS = 50; // 방해 라인 보내기에 필요한 점수
-const getRandomPiece = () => TETROMINOS[Math.floor(Math.random() * TETROMINOS.length)] + '0';
+
+// 랜덤 테트로미노 생성 함수
+export const getRandomPiece = () => {
+  return GAME_VALUES.PIECES[Math.floor(Math.random() * GAME_VALUES.PIECES.length)] as tsValidators["PIECES"];
+}
+
+export const createPlayer = mutation({
+  args: {
+    playerName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("players", {
+      playerName: args.playerName,
+      score: 0,
+      level: 1,
+      lines: 0,
+      board: "0".repeat(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH * GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT),
+      currentPiece: getRandomPiece(),
+      nextPiece: getRandomPiece(),
+      holdPiece: undefined,
+      position: { x: 4, y: 0 },
+      rotation: 0,
+      isPlaying: false,
+      isReady: false,
+      garbageLines: 0,
+      gameId: undefined
+    });
+  }
+});
 
 // 게임 생성
 export const createGame = mutation({
   args: {
-    playerName: v.string(),
+    playerId: v.id("players"),
+    mode: convexValidators.MODES
   },
   handler: async (ctx, args) => {
-    const gameId = await ctx.db.insert("games", {
-      status: "waiting",
-      players: [],
-      settings: {
-        startLevel: 1,
-        gameSpeed: 1000,
-      },
-      winnerId: null
-    });
+    try {
+      const gameId = await ctx.db.insert("games", {
+        status: 'waiting',
+        mode: args.mode,
+        players: [args.playerId],
+        settings: {
+          startLevel: 1,
+          gameSpeed: 1000,
+        },
+        winnerId: undefined
+      });
 
-    const playerId = await ctx.db.insert("players", {
-      gameId,
-      name: args.playerName,
-      score: 0,
-      level: 1,
-      lines: 0,
-      board: "0".repeat(200),
-      currentPiece: getRandomPiece(),
-      nextPiece: getRandomPiece(),
-      position: { x: 4, y: 0 },
-      isReady: false,
-      isPlaying: false,
-      garbageLines: 0,
-    });
-
-    await ctx.db.patch(gameId, {
-      players: [playerId],
-    });
-
-    return { gameId, playerId };
-  },
-});
-
-// 게임 참가
-export const joinGame = mutation({
-  args: {
-    gameId: v.id("games"),
-    playerName: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const game = await ctx.db.get(args.gameId);
-    if (!game || game.status !== "waiting") throw new Error("Cannot join game");
-
-    const playerId = await ctx.db.insert("players", {
-      gameId: args.gameId,
-      name: args.playerName,
-      score: 0,
-      level: 1,
-      lines: 0,
-      board: "0".repeat(200),
-      currentPiece: getRandomPiece(),
-      nextPiece: getRandomPiece(),
-      position: { x: 4, y: 0 },
-      isReady: false,
-      isPlaying: false,
-      garbageLines: 0,
-    });
-
-    await ctx.db.patch(args.gameId, {
-      players: [...game.players, playerId],
-    });
-
-    return playerId;
+      return { gameId, playerId: args.playerId };
+    } catch (error) {
+      console.error('Error in createGame:', error);
+      throw error;
+    }
   },
 });
 
@@ -89,6 +93,26 @@ export const getGame = query({
   },
 });
 
+// 게임 참가
+export const joinGame = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    const game = await getGame(ctx, { gameId: args.gameId });
+    if (!game) throw new Error("Game not found");
+    if (game.status !== "waiting") throw new Error("Game is not waiting");
+    if(game.players.includes(args.playerId)) throw new Error("Player already in game");
+
+    await ctx.db.patch(args.gameId, {
+      players: [...game.players, args.playerId],
+    });
+
+    return game;
+  }
+});
+
 export const getPlayer = query({
   args: { playerId: v.id("players") },
   handler: async (ctx, args) => {
@@ -96,167 +120,191 @@ export const getPlayer = query({
   },
 });
 
-export const getPlayers = query({
+export const getPlayerIds = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, args) => {
     const game = await ctx.db.get(args.gameId);
     if (!game) return null;
-    
-    return await Promise.all(
-      game.players.map((playerId: Id<"players">) => ctx.db.get(playerId))
-    );
+    return await Promise.all(game.players.map((playerId: Id<"players">) => ctx.db.get(playerId)));
   },
 });
 
-// 테트로미노 이동
-export const moveTetrominoe = mutation({
+// 모든 게임 액션을 처리하는 통합 함수
+export const handleGameAction = mutation({
   args: {
     gameId: v.id("games"),
     playerId: v.id("players"),
-    direction: v.string()
+    action: convexValidators.DIRECTIONS
   },
   handler: async (ctx, args) => {
-    const player = await ctx.db.get(args.playerId);
-    if (!player || !player.isPlaying) return;
+    console.log('Action received:', args.action);  // 액션 로깅
 
-    let newX = player.position.x;
-    let newY = player.position.y;
-
-    switch (args.direction) {
-      case "left":
-        newX = Math.max(0, newX - 1);
-        break;
-      case "right":
-        newX = Math.min(9, newX + 1);
-        break;
-      case "down":
-        newY = Math.min(19, newY + 1);
-        break;
-    }
-
-    const board = stringToBoard(player.board);
-    const canMove = !checkCollision(board, player.currentPiece, newX, newY);
-
-    if (canMove) {
-      await ctx.db.patch(args.playerId, {
-        position: { x: newX, y: newY }
-      });
-    } else if (args.direction === "down") {
-      // 바닥에 닿았을 때 처리
-      await lockPiece(ctx, args.playerId, player);
-    }
-  },
-});
-
-// 테트로미노 회전
-export const rotateTetrominoe = mutation({
-  args: {
-    gameId: v.id("games"),
-    playerId: v.id("players")
-  },
-  handler: async (ctx, args) => {
-    const player = await ctx.db.get(args.playerId);
-    if (!player || !player.isPlaying) return;
-
-    const board = stringToBoard(player.board);
-    const rotatedPiece = rotatePiece(player.currentPiece);
-
-    if (!checkCollision(board, rotatedPiece, player.position.x, player.position.y)) {
-      await ctx.db.patch(args.playerId, {
-        currentPiece: rotatedPiece
-      });
-    }
-  },
-});
-
-// 하드 드롭
-export const hardDrop = mutation({
-  args: { 
-    gameId: v.id("games"), 
-    playerId: v.id("players") 
-  },
-  handler: async (ctx, args) => {
-    const player = await ctx.db.get(args.playerId);
-    if (!player || !player.isPlaying) return;
-
-    const board = stringToBoard(player.board);
-    let newY = player.position.y;
-
-    // 충돌할 때까지 아래로 이동
-    while (!checkCollision(board, player.currentPiece, player.position.x, newY + 1)) {
-      newY++;
-    }
-
-    // 위치 업데이트 후 조각 고정
-    await ctx.db.patch(args.playerId, {
-      position: { x: player.position.x, y: newY }
-    });
+    const player = await ctx.db.get(args.playerId) as DbPlayerState;
     
-    await lockPiece(ctx, args.playerId, {
-      ...player,
-      position: { x: player.position.x, y: newY }
-    });
-  },
-});
+    // AI 플레이어는 항상 isPlaying true로 처리
+    if (!player?.isPlaying && !player?.isAI) {
+      return;
+    }
 
-// 자동 하강
-export const autoDown = mutation({
-  args: {
-    gameId: v.id("games"),
-    playerId: v.id("players")
-  },
-  handler: async (ctx, args) => {
-    const player = await ctx.db.get(args.playerId);
-    if (!player || !player.isPlaying) return;
+    // hold 액션 처리
+    if (args.action === 'hold') {
+      console.log('Hold action - Before:', {
+        currentPiece: player.currentPiece,
+        holdPiece: player.holdPiece,
+        nextPiece: player.nextPiece
+      });
 
-    // Call moveTetrominoe mutation directly
-    await moveTetrominoe(ctx, {
-      gameId: args.gameId,
-      playerId: args.playerId,
-      direction: "down"
+      const currentPiece = player.currentPiece;
+      const holdPiece = player.holdPiece;
+      const nextPiece = player.nextPiece;
+
+      const updates = {
+        currentPiece: holdPiece || nextPiece,
+        nextPiece: holdPiece ? nextPiece : getRandomPiece(),
+        holdPiece: currentPiece,
+        position: { x: 4, y: 0 },
+        rotation: 0
+      };
+
+      console.log('Hold action - Updates:', updates);
+
+      await ctx.db.patch(args.playerId, updates);
+
+      const updatedPlayer = await ctx.db.get(args.playerId);
+      console.log('Hold action - After:', {
+        currentPiece: updatedPlayer?.currentPiece,
+        holdPiece: updatedPlayer?.holdPiece,
+        nextPiece: updatedPlayer?.nextPiece
+      });
+
+      return;
+    }
+
+    const board = stringToBoard(player.board);
+    const newPosition = { ...player.position };
+    let newRotation = player.rotation;
+
+    if (args.action === 'hardDrop') {
+      // 바닥에 닿을 때까지 아래로 이동
+      while (!checkCollision(
+        board,
+        player.currentPiece,
+        newPosition.x,
+        newPosition.y + 1,
+        newRotation
+      )) {
+        newPosition.y += 1;
+      }
+      // 바로 피스 고정
+      await placePiece(ctx, args.playerId, {
+        ...player,
+        position: newPosition,
+        gameId: args.gameId
+      });
+      return;
+    }
+
+    // 나머지 액션 처리
+    switch (args.action) {
+      case 'left':
+        newPosition.x -= 1;
+        break;
+      case 'right':
+        newPosition.x += 1;
+        break;
+      case 'down':
+        newPosition.y += 1;
+        break;
+      case 'rotate':
+        newRotation = (newRotation + 1) % 4;
+        break;
+    }
+
+    // 충돌 체크
+    if (checkCollision(board, player.currentPiece, newPosition.x, newPosition.y, newRotation)) {
+      if (args.action === 'down') {
+        await placePiece(ctx, args.playerId, {
+          ...player,
+          gameId: args.gameId
+        });
+        return;
+      }
+      return;
+    }
+
+    // 상태 업데이트
+    await ctx.db.patch(args.playerId, {
+      position: newPosition,
+      rotation: newRotation
     });
+
+    return await ctx.db.get(args.playerId);
   }
 });
+// 피스를 드에 배치하고 게임 상태를 업데이트하는 통합 함수
+async function placePiece(
+  ctx: MutationCtx, 
+  playerId: Id<"players">, 
+  player: DbPlayerState
+) {
+  const board = stringToBoard(player.board);
+  const newBoard = board.map(row => [...row]);
+  const pieceMatrix = PIECE_ROTATIONS[player.currentPiece][player.rotation];
 
-// 게임 시작
-export const startGame = mutation({
-  args: {
-    gameId: v.id("games")
-  },
-  handler: async (ctx, args) => {
-    const game = await ctx.db.get(args.gameId);
-    if (!game) return;
-
-    await ctx.db.patch(args.gameId, {
-      status: "playing"
-    });
-
-    const players = await ctx.db
-      .query("players")
-      .filter(q => q.eq(q.field("gameId"), args.gameId))
-      .collect();
-
-    for (const player of players) {
-      await ctx.db.patch(player._id, {
-        isPlaying: true,
-        board: "0".repeat(200),
-        score: 0,
-        level: 1,
-        lines: 0,
-        currentPiece: getRandomPiece(),
-        nextPiece: getRandomPiece(),
-        position: { x: 4, y: 0 },
-        garbageLines: 0
-      });
+  for (let py = 0; py < pieceMatrix.length; py++) {
+    for (let px = 0; px < pieceMatrix[py].length; px++) {
+      if (pieceMatrix[py][px]) {
+        const boardY = player.position.y + py;
+        const boardX = player.position.x + px;
+        if (boardY >= 0 && boardY < GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT && 
+            boardX >= 0 && boardX < GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH) {
+          newBoard[boardY][boardX] = 1;
+        }
+      }
     }
   }
-});
 
-// 유틸리티 함수들
+  const { updatedBoard: clearedBoard, linesCleared } = clearLines(newBoard);
+  const newScore = player.score + calculateScore(linesCleared, player.level);
+  const newLines = player.lines + linesCleared;
+  const newLevel = Math.floor(newLines / 10) + 1;
+
+  const nextPosition = { x: 4, y: 0 };
+  const isGameOver = checkCollision(
+    clearedBoard, 
+    player.nextPiece,
+    nextPosition.x,
+    nextPosition.y,
+    0
+  );
+
+  if (isGameOver) {
+    if (!player.gameId) {
+      throw new Error("Game ID not found");
+    }
+    await endGame(ctx, { 
+      gameId: player.gameId, 
+      playerId 
+    });
+    return;
+  }
+
+  await ctx.db.patch(playerId, {
+    board: boardToString(clearedBoard),
+    score: newScore,
+    level: newLevel,
+    lines: newLines,
+    currentPiece: player.nextPiece,
+    nextPiece: getRandomPiece(),
+    position: nextPosition,
+    rotation: 0
+  });
+}
+
 function stringToBoard(boardString: string): number[][] {
   const board = [];
-  for (let i = 0; i < 20; i++) {
-    board.push(boardString.slice(i * 10, (i + 1) * 10).split('').map(Number));
+  for (let i = 0; i < GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT; i++) {
+    board.push(boardString.slice(i * GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH, (i + 1) * GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH).split('').map(Number));
   }
   return board;
 }
@@ -265,108 +313,45 @@ function boardToString(board: number[][]): string {
   return board.flat().join('');
 }
 
-async function lockPiece(
-  ctx: MutationCtx, 
-  playerId: Id<"players">, 
-  player: {
-    _id: Id<"players">;
-    gameId: Id<"games">;
-    board: string;
-    currentPiece: string;
-    nextPiece: string;
-    position: { x: number; y: number };
-    score: number;
-    level: number;
-    lines: number;
-    isPlaying: boolean;
-    garbageLines: number;
-  }
-) {
-  const board = stringToBoard(player.board);
-  const updatedBoard = placePiece(board, player.currentPiece, player.position.x, player.position.y);
-  
-  // 라인 제거 처리
-  const { updatedBoard: clearedBoard, linesCleared } = clearLines(updatedBoard);
-  
-  // 점수 계산
-  const additionalScore = calculateScore(linesCleared, player.level);
-  const newLines = player.lines + linesCleared;
-  const newLevel = Math.floor(newLines / 10) + 1;
-  
-  // 방해 라인 처리
-  let garbageLines = player.garbageLines;
-  if (linesCleared > 0) {
-    garbageLines = Math.max(0, garbageLines - linesCleared);
-  }
-  
-  // 게임 오버 체크
-  if (checkGameOver(clearedBoard)) {
-    await handleGameOver(ctx, player.gameId, playerId);
-    return;
-  }
-
-  // 상태 업데이트
-  await ctx.db.patch(playerId, {
-    board: boardToString(clearedBoard),
-    score: player.score + additionalScore,
-    level: newLevel,
-    lines: newLines,
-    currentPiece: player.nextPiece,
-    nextPiece: getRandomPiece(),
-    position: { x: 4, y: 0 },
-    garbageLines
-  });
-
-  // 방해 라인 보내기 체크
-  if (additionalScore >= GARBAGE_LINE_POINTS) {
-    await sendGarbageLines(ctx, player.gameId, playerId);
-  }
-}
-
-function checkCollision(board: number[][], piece: string, x: number, y: number): boolean {
-  const pieceMatrix = getPieceMatrix(piece);
+function checkCollision(
+  board: number[][], 
+  piece: tsValidators["PIECES"],
+  x: number, 
+  y: number,
+  rotation: number
+): boolean {
+  const pieceMatrix = PIECE_ROTATIONS[piece][rotation];
   
   for (let py = 0; py < pieceMatrix.length; py++) {
     for (let px = 0; px < pieceMatrix[py].length; px++) {
       if (pieceMatrix[py][px]) {
         const boardX = x + px;
         const boardY = y + py;
+        // 경계 체크
+        if (boardX < 0 || boardX >= GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH || boardY >= GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT) {
+          return true;
+        }
 
-        if (
-          boardX < 0 || 
-          boardX >= 10 || 
-          boardY >= 20 ||
-          (boardY >= 0 && board[boardY][boardX])
-        ) {
+        if (boardY < 0) {
+          continue;
+        }
+
+        if (board[boardY][boardX]) {
           return true;
         }
       }
     }
   }
+
   return false;
-}
-
-function placePiece(board: number[][], piece: string, x: number, y: number): number[][] {
-  const pieceMatrix = getPieceMatrix(piece);
-  const newBoard = board.map(row => [...row]);
-
-  for (let py = 0; py < pieceMatrix.length; py++) {
-    for (let px = 0; px < pieceMatrix[py].length; px++) {
-      if (pieceMatrix[py][px] && y + py >= 0) {
-        newBoard[y + py][x + px] = 1;
-      }
-    }
-  }
-
-  return newBoard;
 }
 
 function clearLines(board: number[][]): { updatedBoard: number[][], linesCleared: number } {
   const newBoard = board.filter(row => !row.every(cell => cell === 1));
-  const linesCleared = 20 - newBoard.length;
+  const linesCleared = GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT - newBoard.length;
   
-  while (newBoard.length < 20) {
-    newBoard.unshift(Array(10).fill(0));
+  for (let i = 0; i < linesCleared; i++) {
+    newBoard.unshift(Array(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH).fill(0));
   }
   
   return {
@@ -376,88 +361,9 @@ function clearLines(board: number[][]): { updatedBoard: number[][], linesCleared
 }
 
 function calculateScore(linesCleared: number, level: number): number {
-  return BASE_POINTS[linesCleared] * level;
+  return GAME_VALUES.BASE_POINTS[linesCleared as keyof typeof GAME_VALUES.BASE_POINTS] * level;
 }
-
-function checkGameOver(board: number[][]): boolean {
-  return board[0].some(cell => cell === 1);
-}
-
-async function handleGameOver(ctx: MutationCtx, gameId: Id<"games">, loserId: Id<"players">) {
-  const game = await ctx.db.get(gameId);
-  if (!game) return;
-
-  // 승자 결정 (2인용 게임 기준)
-  const winnerId = game.players.find((id: Id<"players">) => id !== loserId);
-
-  await ctx.db.patch(gameId, {
-    status: "finished",
-    winnerId
-  });
-
-  // 모든 플레이어 게임 종료 처리
-  for (const playerId of game.players) {
-    await ctx.db.patch(playerId, {
-      isPlaying: false
-    });
-  }
-}
-
-async function sendGarbageLines(ctx: MutationCtx, gameId: Id<"games">, fromPlayerId: Id<"players">) {
-  const game = await ctx.db.get(gameId);
-  if (!game) return;
-
-  // 상대 플레이어에게 방해 라인 추가
-  const targetPlayerId = game.players.find((id: Id<"players">) => id !== fromPlayerId);
-  if (!targetPlayerId) return;
-
-  const targetPlayer = await ctx.db.get(targetPlayerId);
-  if (!targetPlayer) return;
-
-  await ctx.db.patch(targetPlayerId, {
-    garbageLines: targetPlayer.garbageLines + 1
-  });
-}
-
-function getPieceMatrix(piece: string): number[][] {
-  const shapes: { [key: string]: number[][] } = {
-    'I0': [[1, 1, 1, 1]],
-    'I1': [[1], [1], [1], [1]],
-    'O': [[1, 1], [1, 1]],
-    'T0': [[0, 1, 0], [1, 1, 1]],
-    'T1': [[1, 0], [1, 1], [1, 0]],
-    'T2': [[1, 1, 1], [0, 1, 0]],
-    'T3': [[0, 1], [1, 1], [0, 1]],
-    'S0': [[0, 1, 1], [1, 1, 0]],
-    'S1': [[1, 0], [1, 1], [0, 1]],
-    'Z0': [[1, 1, 0], [0, 1, 1]],
-    'Z1': [[0, 1], [1, 1], [1, 0]],
-    'J0': [[1, 0, 0], [1, 1, 1]],
-    'J1': [[1, 1], [1, 0], [1, 0]],
-    'J2': [[1, 1, 1], [0, 0, 1]],
-    'J3': [[0, 1], [0, 1], [1, 1]],
-    'L0': [[0, 0, 1], [1, 1, 1]],
-    'L1': [[1, 0], [1, 0], [1, 1]],
-    'L2': [[1, 1, 1], [1, 0, 0]],
-    'L3': [[1, 1], [0, 1], [0, 1]]
-  };
-  return shapes[piece] || [[1]];
-}
-
-function rotatePiece(piece: string): string {
-  const rotations: { [key: string]: string } = {
-    'I0': 'I1', 'I1': 'I0',
-    'T0': 'T1', 'T1': 'T2', 'T2': 'T3', 'T3': 'T0',
-    'S0': 'S1', 'S1': 'S0',
-    'Z0': 'Z1', 'Z1': 'Z0',
-    'J0': 'J1', 'J1': 'J2', 'J2': 'J3', 'J3': 'J0',
-    'L0': 'L1', 'L1': 'L2', 'L2': 'L3', 'L3': 'L0',
-    'O': 'O'
-  };
-  return rotations[piece] || piece;
-}
-
-// 게임 일시정지
+// 게임 정지
 export const pauseGame = mutation({
   args: { gameId: v.id("games") },
   handler: async (ctx, args) => {
@@ -484,32 +390,42 @@ export const pauseGame = mutation({
   }
 });
 
-// Ready 상태 설정
+// Ready 상태 정
 export const setReady = mutation({
   args: {
     gameId: v.id("games"),
     playerId: v.id("players")
   },
   handler: async (ctx, args) => {
+    // 1. 플레이어 존재 확인
     const player = await ctx.db.get(args.playerId);
-    if (!player) return;
+    if (!player) {
+      throw new Error("Player not found");
+    }
 
+    // 2. 게임 존재 확인
+    const game = await ctx.db.get(args.gameId);
+    if (!game) {
+      throw new Error("Game not found");
+    }
+
+    // 3. 플레이어 상태 업데이트
     await ctx.db.patch(args.playerId, {
-      isReady: true
+      gameId: args.gameId,  // 게임 ID 연결
+      isReady: true,
+      isPlaying: true
     });
 
-    // 모든 플레이어가 준비되었는지 확인
-    const game = await ctx.db.get(args.gameId);
-    if (!game) return;
-
+    // 4. 모든 플레이어가 ready인지 확인
     const allPlayers = await Promise.all(
-      game.players.map((pid: Id<"players">) => ctx.db.get(pid))
+      game.players.map(pid => ctx.db.get(pid))
     );
 
     const allReady = allPlayers.every(p => p?.isReady);
     if (allReady) {
-      // Call startGame mutation directly
-      await startGame(ctx, { gameId: args.gameId });
+      await ctx.db.patch(args.gameId, { 
+        status: "playing" 
+      });
     }
   }
 });
@@ -523,3 +439,220 @@ export const listGames = query({
       .collect();
   },
 });
+
+export const getGameState = query({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    if (!game) return null;
+
+    const players = await ctx.db
+      .query("players")
+      .filter(q => q.eq(q.field("gameId"), args.gameId))
+      .collect();
+
+    return {
+      status: game.status,
+      players: players.map(player => ({
+        id: player._id,
+        name: player.playerName,
+        board: player.board,
+        score: player.score,
+        lines: player.lines,
+        isPlaying: player.isPlaying
+      })),
+      currentPlayer: players.find(p => 
+        p._id === localStorage.getItem('playerId')
+      )
+    };
+  }
+});
+
+export const endGame = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players")
+  },
+  handler: async (ctx, args) => {
+    try {
+      // 1. 게임 상태를 finished로 변경
+      await ctx.db.patch(args.gameId, {
+        status: "finished",
+        winnerId: args.playerId
+      });
+
+      // 2. 모든 플레이어 상태 초기화
+      const players = await ctx.db
+        .query("players")
+        .filter(q => q.eq(q.field("gameId"), args.gameId))
+        .collect();
+
+      for (const player of players) {
+        await ctx.db.patch(player._id, {
+          gameId: undefined,
+          isPlaying: false,
+          isReady: false,
+          score: 0,
+          level: 1,
+          lines: 0,
+          board: "0".repeat(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH * GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT),
+          currentPiece: getRandomPiece(),
+          nextPiece: getRandomPiece(),
+          holdPiece: undefined,
+          position: { x: 4, y: 0 },
+          rotation: 0,
+          garbageLines: 0
+        });
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in endGame mutation:', error);
+      throw error;
+    }
+  }
+});
+
+// 방 라이어 보내기 기능
+export const sendGarbageLines = mutation({
+  args: {
+    gameId: v.id("games"),
+    fromPlayerId: v.id("players"),
+    toPlayerId: v.id("players"),
+    lineCount: v.number()
+  },
+  handler: async (ctx, args) => {
+    const targetPlayer = await ctx.db.get(args.toPlayerId);
+    if (!targetPlayer) return;
+    
+    await ctx.db.patch(args.toPlayerId, {
+      garbageLines: (targetPlayer.garbageLines || 0) + args.lineCount
+    });
+  }
+});
+
+export const syncState = mutation({
+  args: {
+    gameId: v.id("games"),
+    state: v.object({
+      board: v.string(),
+      currentPiece: convexValidators.PIECES,
+      nextPiece: convexValidators.PIECES,
+      holdPiece: v.optional(convexValidators.PIECES),
+      score: v.number(),
+      level: v.number(),
+      lines: v.number()
+    })
+  },
+  handler: async (ctx, args) => {
+    const { gameId, state } = args;
+    const player = await ctx.db
+      .query("players")
+      .filter(q => q.eq(q.field("gameId"), gameId))
+      .first();
+    
+    if (!player) return null;
+
+    // 플레이어 상태 직접 업데이트
+    await ctx.db.patch(player._id, {
+      board: state.board,
+      currentPiece: state.currentPiece,
+      nextPiece: state.nextPiece,
+      holdPiece: state.holdPiece,
+      score: state.score,
+      level: state.level,
+      lines: state.lines
+    });
+
+    return state;
+  }
+});
+
+// getPlayers 쿼리 추가
+export const getPlayers = query({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("players")
+      .filter(q => q.eq(q.field("gameId"), args.gameId))
+      .collect();
+  }
+});
+
+// moveTetrominoe mutation 수정
+export const moveTetrominoe = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+    direction: convexValidators.DIRECTIONS
+  },
+  handler: async (ctx, args) => {
+    const player = await ctx.db.get(args.playerId);
+    if (!player) return;
+    // ... 나머지 코드
+  }
+});
+
+// startGame mutation 추가
+export const startGame = mutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    if (!game) return;
+
+    await ctx.db.patch(args.gameId, {
+      status: "playing"
+    });
+  }
+});
+
+// 새로운 mutation 추가
+export const startGameAfterDelay = mutation({
+  args: {
+    gameId: v.id("games")
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.gameId, {
+      status: "playing"
+    });
+  }
+});
+
+// AI 플레이어 생성
+export const createAIPlayer = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerName: v.string()
+  },
+  handler: async (ctx, args) => {
+    // AI 플레이어 생성
+    const aiPlayerId = await ctx.db.insert("players", {
+      gameId: args.gameId,
+      playerName: args.playerName,
+      score: 0,
+      level: 1,
+      lines: 0,
+      board: "0".repeat(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH * GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT),
+      currentPiece: getRandomPiece(),
+      nextPiece: getRandomPiece(),
+      holdPiece: undefined,
+      position: { x: 4, y: 0 },
+      rotation: 0,
+      isPlaying: false,
+      isReady: false,
+      garbageLines: 0,
+      isAI: true  // AI 플레이어 표시
+    });
+
+    // 게임에 AI 플레이어 추가
+    const game = await ctx.db.get(args.gameId);
+    if (game) {
+      await ctx.db.patch(args.gameId, {
+        players: [...game.players, aiPlayerId]
+      });
+    }
+
+    return aiPlayerId;
+  }
+});
+

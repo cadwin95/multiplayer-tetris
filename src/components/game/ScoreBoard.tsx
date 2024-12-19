@@ -1,22 +1,41 @@
 interface ScoreBoardProps {
-  players: Array<{
+  score?: number;
+  level?: number;
+  lines?: number;
+  players?: Array<{
+    _id: string;
     name: string;
     score: number;
-    _id: string;
   }>;
 }
 
-export function ScoreBoard({ players }: ScoreBoardProps) {
-  return (
-    <div className="bg-gray-900 p-4 rounded-lg min-w-[200px]">
-      <h3 className="text-white text-xl mb-4 text-center">Scores</h3>
-      <div className="space-y-2">
+export function ScoreBoard({ score, level, lines, players }: ScoreBoardProps) {
+  if (players) {
+    return (
+      <div className="score-board">
         {players.map(player => (
-          <div key={player._id} className="flex justify-between items-center">
-            <span className="text-white">{player.name}</span>
-            <span className="text-blue-400">{player.score}</span>
+          <div key={player._id} className="score-item">
+            <label>{player.name}:</label>
+            <span>{player.score}</span>
           </div>
         ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="score-board">
+      <div className="score-item">
+        <label>Score:</label>
+        <span>{score}</span>
+      </div>
+      <div className="score-item">
+        <label>Level:</label>
+        <span>{level}</span>
+      </div>
+      <div className="score-item">
+        <label>Lines:</label>
+        <span>{lines}</span>
       </div>
     </div>
   );
