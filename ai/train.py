@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import random
 import signal
 import sys
+import glob
+import os
 
 from environment import TetrisEnv
 from model import DQN
@@ -15,16 +17,18 @@ from utils import ReplayBuffer, prepare_training_data, save_model
 
 def train(
     num_episodes: int = 10000,
-    batch_size: int = 32,
+    batch_size: int = 128,
     gamma: float = 0.99,
     epsilon_start: float = 1.0,
-    epsilon_end: float = 0.1,
-    epsilon_decay: float = 0.995,
-    learning_rate: float = 3e-4,
-    target_update: int = 5,
-    memory_size: int = 50000,
+    epsilon_end: float = 0.01,
+    epsilon_decay: float = 0.999,
+    learning_rate: float = 1e-4,
+    target_update: int = 100,
+    memory_size: int = 100000,
     save_path: str = 'tetris_model.pth',
-    checkpoint_interval: int = 1000
+    checkpoint_interval: int = 2000,
+    clear_memory_freq: int = 1000,
+    resume_from=None
 ):
     # GPU 사용 가능 여부 확인 및 출력
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -59,7 +63,28 @@ def train(
     scores = []
     epsilon = epsilon_start
     
-    for episode in tqdm(range(num_episodes)):
+    # GPU 메모리 최적화
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.backends.cudnn.benchmark = True
+
+    if resume_from and os.path.exists(resume_from):
+        checkpoint = torch.load(resume_from)
+        policy_net.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        start_episode = checkpoint['episode']
+        epsilon = checkpoint['epsilon']
+        print(f"Resuming from episode {start_episode}")
+    else:
+        start_episode = 0
+
+    # get_target_q 함수를 train 함수 내부로 이동
+    @torch.no_grad()
+    def get_target_q(next_states, rewards, dones):
+        next_q = target_net(next_states).max(1)[0]
+        return rewards + (gamma * next_q * (1 - dones))
+
+    for episode in tqdm(range(start_episode, num_episodes)):
         state, _ = env.reset()
         score = 0
         
@@ -89,8 +114,7 @@ def train(
                 
                 # Q-값 계산
                 current_q = policy_net(states).gather(1, actions.unsqueeze(1))
-                next_q = target_net(next_states).max(1)[0].detach()
-                target_q = rewards + (gamma * next_q * (1 - dones))
+                target_q = get_target_q(next_states, rewards, dones)
                 
                 # 손실 계산 및 최적화
                 loss = nn.MSELoss()(current_q.squeeze(), target_q)
@@ -134,6 +158,15 @@ def train(
             plt.ylabel('Score')
             plt.savefig(f'training_progress_ep{episode}.png')
             plt.close()
+            
+            # 이전 파일 삭제
+            for old_checkpoint in glob.glob('tetris_model_ep*.pth'):
+                if old_checkpoint != checkpoint_path:
+                    os.remove(old_checkpoint)
+        
+        # 메모리 정리 추가
+        if episode % clear_memory_freq == 0:
+            memory = ReplayBuffer(memory_size)
     
     # 모델 저장
     save_model(policy_net, save_path)

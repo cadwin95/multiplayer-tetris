@@ -30,3 +30,36 @@ convex/.env
 .DS_Store
 build/
 dist/
+
+# AI Training
+ai/__pycache__/
+ai/*.pth
+ai/*.onnx
+ai/runs/
+ai/training_progress*.png
+ai/checkpoints/
+
+# Python
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+.python-version
+
+# Virtual Environment
+venv/
+env/
+.env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and databases
+*.log
+*.sqlite
+tensorboard/
+runs/

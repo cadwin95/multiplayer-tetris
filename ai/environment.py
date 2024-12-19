@@ -31,6 +31,13 @@ class TetrisEnv(gym.Env):
         self.hold_piece = None
         self.can_hold = True  # hold 사용 가능 여부
         
+        self.max_steps = 1000  # 최대 스텝 수 제한
+        
+        self.difficulty = 1.0
+        self.auto_drop_counter = 0  # 자동 하강 카운터 추가
+        self.action_counter = 0  # 액션 카운터 추가
+        self.action_delay = 3    # 액션 사이의 지연 추가
+        
         self.reset()
     
     def _get_random_piece(self) -> Dict:
@@ -70,37 +77,24 @@ class TetrisEnv(gym.Env):
         return lines_cleared
     
     def _calculate_reward(self, lines_cleared: int) -> float:
-        # 게임 생존 보상 추가
-        reward = 1  # 기본 생존 보상
-
-        # 라인 클리어 보상 증가
-        line_rewards = {1: 200, 2: 600, 3: 1000, 4: 2000}  # 보상 2배 증가
-        reward += line_rewards.get(lines_cleared, 0)
+        # 기본적으로 라인 클리어에만 집중
+        if lines_cleared == 0:
+            return 0  # 라인을 클리어하지 않으면 보상 없음
         
-        # 페널티 감소
-        heights = [0] * 10
-        for x in range(10):
-            for y in range(20):
-                if self.board[y][x]:
-                    heights[x] = 20 - y
-                    break
+        # 라인 클리어 보상 (기하급수적 증가)
+        line_rewards = {
+            1: 100,    # 1줄: 기본 점수
+            2: 300,    # 2줄: 3배
+            3: 500,    # 3줄: 9배
+            4: 700    # 테트리스: 27배
+        }
+        reward = line_rewards.get(lines_cleared, 0)
         
-        max_height = max(heights)
-        height_penalty = max_height   # 2에서 1로 감소
+        # 게임 오버 페널티
+        if self._is_game_over():
+            reward -= 1000  # 게임 오버시 큰 페널티
         
-        # 구멍 페널티
-        holes = 0
-        for x in range(10):
-            found_block = False
-            for y in range(20):
-                if self.board[y][x]:
-                    found_block = True
-                elif found_block:
-                    holes += 1
-        
-        holes_penalty = holes * 5     # 10에서 5로 감소
-        
-        return reward - height_penalty - holes_penalty
+        return reward
     
     def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict]:
         super().reset(seed=seed)
@@ -112,16 +106,41 @@ class TetrisEnv(gym.Env):
         self.can_hold = True
         self.score = 0
         self.lines_cleared = 0
+        self.steps = 0
         
         return self._get_state(), {}
+    
+    def _move_down(self) -> bool:
+        """피스를 한 칸 아래로 이동. 성공하면 True, 실패하면 False 반환"""
+        new_pos = [self.current_piece['position'][0], self.current_piece['position'][1] + 1]
+        if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
+            self.current_piece['position'] = new_pos
+            return True
+        return False
     
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict]:
         reward = 0
         done = False
         
-        # hold piece 액션 추가
-        if action == 5:  # hold
-            if self.can_hold:
+        # 최대 스텝 수 초과시 게임 종료
+        self.steps += 1
+        if self.steps >= self.max_steps:
+            done = True
+            reward -= 10
+        
+        # 난이도에 따른 자동 하강 (속도 감소)
+        self.difficulty = min(2.0, 1.0 + self.steps / 1000)  # 500 -> 1000으로 변경
+        self.auto_drop_counter += self.difficulty * 0.2  # 하강 속도 감소
+        
+        # 액션 카운터 증가
+        self.action_counter += 1
+        
+        # 액션 지연이 지난 후에만 새로운 액션 처리
+        if self.action_counter >= self.action_delay:
+            self.action_counter = 0
+            
+            # 액션 처리
+            if action == 5 and self.can_hold:  # hold
                 if self.hold_piece is None:
                     self.hold_piece = {
                         'type': self.current_piece['type'],
@@ -148,31 +167,43 @@ class TetrisEnv(gym.Env):
                     'score': self.score,
                     'lines': self.lines_cleared
                 }
-        
-        # 액션 행
-        if action == 0:  # left
-            new_pos = [self.current_piece['position'][0] - 1, self.current_piece['position'][1]]
-            if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
-                self.current_piece['position'] = new_pos
-        
-        elif action == 1:  # right
-            new_pos = [self.current_piece['position'][0] + 1, self.current_piece['position'][1]]
-            if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
-                self.current_piece['position'] = new_pos
-        
-        elif action == 2:  # rotate
-            new_rotation = (self.current_piece['rotation'] + 1) % len(self.PIECES[self.current_piece['type']])
-            new_shape = self.PIECES[self.current_piece['type']][new_rotation]
-            if not self._check_collision({**self.current_piece, 'rotation': new_rotation, 'shape': new_shape}, self.board):
-                self.current_piece['rotation'] = new_rotation
-                self.current_piece['shape'] = new_shape
-        
-        elif action == 3:  # down
-            new_pos = [self.current_piece['position'][0], self.current_piece['position'][1] + 1]
-            if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
-                self.current_piece['position'] = new_pos
-                reward += 1
-            else:
+            elif action == 0:  # left
+                new_pos = [self.current_piece['position'][0] - 1, self.current_piece['position'][1]]
+                if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
+                    self.current_piece['position'] = new_pos
+            elif action == 1:  # right
+                new_pos = [self.current_piece['position'][0] + 1, self.current_piece['position'][1]]
+                if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
+                    self.current_piece['position'] = new_pos
+            elif action == 2:  # rotate
+                new_rotation = (self.current_piece['rotation'] + 1) % len(self.PIECES[self.current_piece['type']])
+                new_shape = self.PIECES[self.current_piece['type']][new_rotation]
+                if not self._check_collision({**self.current_piece, 'rotation': new_rotation, 'shape': new_shape}, self.board):
+                    self.current_piece['rotation'] = new_rotation
+                    self.current_piece['shape'] = new_shape
+            elif action == 3:  # down
+                new_pos = [self.current_piece['position'][0], self.current_piece['position'][1] + 1]
+                if not self._check_collision({**self.current_piece, 'position': new_pos}, self.board):
+                    self.current_piece['position'] = new_pos
+                    reward += 1
+                else:
+                    self._place_piece()
+                    lines_cleared = self._clear_lines()
+                    reward += self._calculate_reward(lines_cleared)
+                    self.lines_cleared += lines_cleared
+                    
+                    if self._is_game_over():
+                        done = True
+                        reward -= 50
+                    else:
+                        self.current_piece = self.next_piece
+                        self.next_piece = self._get_random_piece()
+            elif action == 4:  # hardDrop
+                while not self._check_collision({**self.current_piece, 
+                    'position': [self.current_piece['position'][0], self.current_piece['position'][1] + 1]}, self.board):
+                    self.current_piece['position'][1] += 1
+                    reward += 2
+                
                 self._place_piece()
                 lines_cleared = self._clear_lines()
                 reward += self._calculate_reward(lines_cleared)
@@ -185,28 +216,22 @@ class TetrisEnv(gym.Env):
                     self.current_piece = self.next_piece
                     self.next_piece = self._get_random_piece()
         
-        elif action == 4:  # hardDrop
-            while not self._check_collision({**self.current_piece, 
-                'position': [self.current_piece['position'][0], self.current_piece['position'][1] + 1]}, self.board):
-                self.current_piece['position'][1] += 1
-                reward += 2
-            
-            self._place_piece()
-            lines_cleared = self._clear_lines()
-            reward += self._calculate_reward(lines_cleared)
-            self.lines_cleared += lines_cleared
-            
-            if self._is_game_over():
-                done = True
-                reward -= 50
-            else:
-                self.current_piece = self.next_piece
-                self.next_piece = self._get_random_piece()
-        
-        # 피스가 고정되면 hold 사용 가능하도록 초기화
-        if action in [3, 4] and not self._check_collision({**self.current_piece, 
-            'position': [self.current_piece['position'][0], self.current_piece['position'][1] + 1]}, self.board):
-            self.can_hold = True
+        # 자동 하강 처리
+        if self.auto_drop_counter >= 1:
+            self.auto_drop_counter = 0
+            if not self._move_down():
+                # 하강 실패시 피스 고정
+                self._place_piece()
+                lines_cleared = self._clear_lines()
+                reward += self._calculate_reward(lines_cleared)
+                self.lines_cleared += lines_cleared
+                
+                if self._is_game_over():
+                    done = True
+                    reward -= 1000
+                else:
+                    self.current_piece = self.next_piece
+                    self.next_piece = self._get_random_piece()
         
         return self._get_state(), reward, done, False, {
             'score': self.score,

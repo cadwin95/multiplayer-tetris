@@ -1,8 +1,8 @@
 import { ClientGameState, DirectionType } from '../../convex/schema';
-import * as ort from 'onnxruntime-web';
+import { InferenceSession, Tensor } from 'onnxruntime-web';
 
 export class ONNXTetrisAI {
-  private session: ort.InferenceSession | null = null;
+  private session: InferenceSession | null = null;
   private readonly actionMap: DirectionType[] = ['left', 'right', 'rotate', 'down', 'hardDrop', 'hold'];
 
   constructor() {
@@ -11,7 +11,7 @@ export class ONNXTetrisAI {
 
   private async initModel() {
     try {
-      this.session = await ort.InferenceSession.create('/tetris_model.onnx');
+      this.session = await InferenceSession.create('/tetris_model.onnx');
     } catch (e) {
       console.error('Failed to load ONNX model:', e);
     }
@@ -76,10 +76,10 @@ export class ONNXTetrisAI {
       }
 
       // 상태 준비
-      const inputTensor = new ort.Tensor(
+      const inputTensor = new Tensor(
         'float32',
         this.prepareState(gameState),
-        [1, 253]  // 배치 크기 1, 입력 크기 253
+        [1, 253]
       );
 
       // 추론 실행
