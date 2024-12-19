@@ -10,7 +10,7 @@ export default function Game() {
   // URL에서 gameId 파라미터 가져오기
   const { gameId: urlGameId } = useParams();
   const [playerId, setPlayerId] = useState<string | null>(null);
-
+  console.log('Game page params:', { gameId: urlGameId, playerId });  // 추가
   // localStorage에서 playerId만 가져오기
   useEffect(() => {
     setPlayerId(localStorage.getItem('playerId'));
