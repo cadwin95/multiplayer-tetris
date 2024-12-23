@@ -1,9 +1,9 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";  
-import { DirectionType, PieceType } from '../../convex/schema';
+import { DirectionType, PieceType, GameStatus } from '../../convex/schema';
 import { Id } from "../../convex/_generated/dataModel";
+import { useState } from "react";
 
-// Piece 타입 정의
 interface Piece {
   type: PieceType;
   rotation: number;
@@ -12,18 +12,27 @@ interface Piece {
 
 interface GameState {
   board: string;
-  currentPiece: Piece | null;
+  currentPiece: Piece;
   nextPiece: Piece;
   holdPiece: Piece | null;
   score: number;
   level: number;
   lines: number;
-  status: 'playing' | 'paused' | 'finished' | 'waiting' | 'ready' | 'idle';
+  status: GameStatus;
 }
 
-export function useGameState(gameId: Id<"games">, playerId: Id<"players">) {
-  const game = useQuery(api.games.getGame, { gameId });
+interface GameStateHook {
+  state: GameState;
+  move: (direction: DirectionType) => Promise<void>;
+  error: Error | null;
+  isLoading: boolean;
+}
+
+export function useGameState(gameId: Id<"games">, playerId: Id<"players">): GameStateHook {
   const player = useQuery(api.games.getPlayer, { playerId });
+  const game = useQuery(api.games.getGame, { gameId });
+  const handleGameAction = useMutation(api.games.handleGameAction);
+  const [error, setError] = useState<Error | null>(null);
 
   const state: GameState = {
     board: player?.board ?? "0".repeat(200),
@@ -48,26 +57,24 @@ export function useGameState(gameId: Id<"games">, playerId: Id<"players">) {
     status: game?.status ?? 'waiting'
   };
 
-  const moveTetrominoe = useMutation(api.games.handleGameAction);
-
-  const actions = {
-    move: async (direction: DirectionType) => {
-      try {
-        await moveTetrominoe({
-          gameId,
-          playerId,
-          action: direction
-        });
-      } catch (error) {
-        console.error('Move failed:', error);
-      }
+  const move = async (direction: DirectionType) => {
+    try {
+      setError(null);
+      await handleGameAction({
+        gameId,
+        playerId,
+        action: direction
+      });
+    } catch (error) {
+      console.error('Move failed:', error);
+      setError(error instanceof Error ? error : new Error('Unknown error'));
     }
   };
 
   return {
     state,
-    error: null as Error | null,
-    isLoading: !game || !player,
-    actions
+    move,
+    error,
+    isLoading: !player || !game
   };
 }

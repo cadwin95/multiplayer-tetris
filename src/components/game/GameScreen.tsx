@@ -19,7 +19,7 @@ interface GameScreenProps {
 }
 
 export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreenProps) {
-  const { state, error, isLoading, actions } = useGameState(gameId, playerId);
+  const { state, move, error, isLoading } = useGameState(gameId, playerId);
   const navigate = useNavigate();
   const { startMeasurement, measureLatency } = usePerformanceMonitor();
   const game = useQuery(api.games.getGame, { gameId });
@@ -45,37 +45,39 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
   };
 
   useGameTimer(
-    state.status === 'playing',
-    gameId,
-    state.level,
-    isAIPlayer
+    () => {
+      if (state.status === 'playing') {
+        move('down');
+      }
+    },
+    state.level
   );
 
   useKeyboard({
     isEnabled: !isAIPlayer && state.status === 'playing' && !isMinimized,
     onMoveLeft: () => {
       startMeasurement();
-      actions.move('left');
+      move('left');
     },
     onMoveRight: () => {
       startMeasurement();
-      actions.move('right');
+      move('right');
     },
     onMoveDown: () => {
       startMeasurement();
-      actions.move('down');
+      move('down');
     },
     onRotate: () => {
       startMeasurement();
-      actions.move('rotate');
+      move('rotate');
     },
     onHardDrop: () => {
       startMeasurement();
-      actions.move('hardDrop');
+      move('hardDrop');
     },
     onHold: () => {
       startMeasurement();
-      actions.move('hold');
+      move('hold');
     }
   });
 

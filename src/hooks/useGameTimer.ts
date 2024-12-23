@@ -1,31 +1,19 @@
 // hooks/useGameTimer.ts
 import { useEffect } from 'react';
-import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
 
 export function useGameTimer(
-  isPlaying: boolean,
-  gameId: Id<"games">,
+  onTick: () => void,
   level: number,
-  isAIPlayer: boolean = false
+  isEnabled: boolean = true
 ) {
-  const moveTetrominoe = useMutation(api.games.handleGameAction);
-  const playerId = localStorage.getItem('playerId') as Id<"players">;
-
   useEffect(() => {
-    if (!isPlaying || (isAIPlayer && !playerId)) return;
+    if (!isEnabled) return;
 
-    if (!isAIPlayer) {
-      const interval = setInterval(async () => {
-        await moveTetrominoe({
-          gameId,
-          playerId,
-          action: 'down'
-        });
-      }, Math.max(100, 1000 - (level * 100)));
+    const interval = setInterval(
+      onTick,
+      Math.max(100, 1000 - (level * 100))
+    );
 
-      return () => clearInterval(interval);
-    }
-  }, [isPlaying, gameId, level, playerId, moveTetrominoe, isAIPlayer]);
+    return () => clearInterval(interval);
+  }, [isEnabled, level, onTick]);
 }

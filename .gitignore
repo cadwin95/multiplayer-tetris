@@ -63,3 +63,7 @@ env/
 *.sqlite
 tensorboard/
 runs/
+
+# Data files
+ai/data/*.npy
+data.zip

@@ -25,7 +25,11 @@ import {
   GAME_VALUES,
   convexValidators, 
   PIECE_ROTATIONS, 
-  DbPlayerState
+  DbPlayerState,
+  DbGameHistory,
+  DbGameResult,
+  gameHistorySchema,
+  gameResultSchema
 } from "./schema";
 
 
@@ -129,6 +133,56 @@ export const getPlayerIds = query({
   },
 });
 
+// 게임 히스토리 저장 함수 추가
+async function _saveGameHistory(
+  ctx: MutationCtx,
+  args: {
+    gameId: Id<"games">,
+    playerId: Id<"players">,
+    action: tsValidators["DIRECTIONS"],
+    beforeState: {
+      board: string,
+      currentPiece: tsValidators["PIECES"],
+      position: { x: number, y: number },
+      rotation: number,
+      nextPiece: tsValidators["PIECES"],
+      holdPiece?: tsValidators["PIECES"],
+      score: number,
+      level: number,
+      lines: number
+    },
+    afterState?: {
+      board: string,
+      currentPiece: tsValidators["PIECES"],
+      position: { x: number, y: number },
+      rotation: number,
+      nextPiece: tsValidators["PIECES"],
+      holdPiece?: tsValidators["PIECES"],
+      score: number,
+      level: number,
+      lines: number
+    },
+    linesCleared: number
+  }
+) {
+  const state = args.afterState || args.beforeState;
+  await ctx.db.insert("gameHistory", {
+    playerId: args.playerId,
+    gameId: args.gameId,
+    sequence: Date.now(),
+    action: args.action,
+    pieceType: args.beforeState.currentPiece,
+    position: args.beforeState.position,
+    rotation: args.beforeState.rotation,
+    linesCleared: args.linesCleared,
+    board: args.beforeState.board,
+    nextPiece: state.nextPiece,
+    holdPiece: state.holdPiece,
+    score: state.score,
+    level: state.level
+  });
+}
+
 // 모든 게임 액션을 처리하는 통합 함수
 export const handleGameAction = mutation({
   args: {
@@ -137,23 +191,29 @@ export const handleGameAction = mutation({
     action: convexValidators.DIRECTIONS
   },
   handler: async (ctx, args) => {
-    console.log('Action received:', args.action);  // 액션 로깅
+    console.log('Action received:', args.action);
 
     const player = await ctx.db.get(args.playerId) as DbPlayerState;
     
-    // AI 플레이어는 항상 isPlaying true로 처리
     if (!player?.isPlaying && !player?.isAI) {
       return;
     }
 
+    // 액션 실행 전 상태 저장
+    const beforeState = {
+      board: player.board,
+      currentPiece: player.currentPiece,
+      position: player.position,
+      rotation: player.rotation,
+      nextPiece: player.nextPiece,
+      holdPiece: player.holdPiece,
+      score: player.score,
+      level: player.level,
+      lines: player.lines
+    };
+
     // hold 액션 처리
     if (args.action === 'hold') {
-      console.log('Hold action - Before:', {
-        currentPiece: player.currentPiece,
-        holdPiece: player.holdPiece,
-        nextPiece: player.nextPiece
-      });
-
       const currentPiece = player.currentPiece;
       const holdPiece = player.holdPiece;
       const nextPiece = player.nextPiece;
@@ -166,43 +226,27 @@ export const handleGameAction = mutation({
         rotation: 0
       };
 
-      console.log('Hold action - Updates:', updates);
-
       await ctx.db.patch(args.playerId, updates);
-
-      const updatedPlayer = await ctx.db.get(args.playerId);
-      console.log('Hold action - After:', {
-        currentPiece: updatedPlayer?.currentPiece,
-        holdPiece: updatedPlayer?.holdPiece,
-        nextPiece: updatedPlayer?.nextPiece
+      
+      const updatedPlayer = await ctx.db.get(args.playerId) as DbPlayerState;
+      await _saveGameHistory(ctx, {
+        ...args,
+        beforeState,
+        afterState: {
+          ...beforeState,
+          ...updates,
+          nextPiece: updates.nextPiece,
+          holdPiece: updates.holdPiece
+        },
+        linesCleared: 0
       });
 
-      return;
+      return updatedPlayer;
     }
 
     const board = stringToBoard(player.board);
     const newPosition = { ...player.position };
     let newRotation = player.rotation;
-
-    if (args.action === 'hardDrop') {
-      // 바닥에 닿을 때까지 아래로 이동
-      while (!checkCollision(
-        board,
-        player.currentPiece,
-        newPosition.x,
-        newPosition.y + 1,
-        newRotation
-      )) {
-        newPosition.y += 1;
-      }
-      // 바로 피스 고정
-      await placePiece(ctx, args.playerId, {
-        ...player,
-        position: newPosition,
-        gameId: args.gameId
-      });
-      return;
-    }
 
     // 나머지 액션 처리
     switch (args.action) {
@@ -218,11 +262,44 @@ export const handleGameAction = mutation({
       case 'rotate':
         newRotation = (newRotation + 1) % 4;
         break;
+      case 'hardDrop':
+        while (!checkCollision(
+          board,
+          player.currentPiece,
+          newPosition.x,
+          newPosition.y + 1,
+          newRotation
+        )) {
+          newPosition.y += 1;
+        }
+        
+        // 하드드롭 상태 저장
+        await _saveGameHistory(ctx, {
+          ...args,
+          beforeState,
+          linesCleared: 0
+        });
+        
+        // 피스 배치
+        await placePiece(ctx, args.playerId, {
+          ...player,
+          position: newPosition,
+          gameId: args.gameId
+        });
+        return;
     }
 
     // 충돌 체크
     if (checkCollision(board, player.currentPiece, newPosition.x, newPosition.y, newRotation)) {
       if (args.action === 'down') {
+        // 충돌 상태 저장
+        await _saveGameHistory(ctx, {
+          ...args,
+          beforeState,
+          linesCleared: 0
+        });
+        
+        // 피스 배치
         await placePiece(ctx, args.playerId, {
           ...player,
           gameId: args.gameId
@@ -233,24 +310,53 @@ export const handleGameAction = mutation({
     }
 
     // 상태 업데이트
-    await ctx.db.patch(args.playerId, {
+    const updates = {
       position: newPosition,
       rotation: newRotation
+    };
+    
+    await ctx.db.patch(args.playerId, updates);
+    
+    // 업데이트된 상태로 히스토리 저장
+    const updatedPlayer = await ctx.db.get(args.playerId) as DbPlayerState;
+    await _saveGameHistory(ctx, {
+      ...args,
+      beforeState,
+      afterState: {
+        ...beforeState,
+        ...updates
+      },
+      linesCleared: 0
     });
 
-    return await ctx.db.get(args.playerId);
+    return updatedPlayer;
   }
 });
-// 피스를 드에 배치하고 게임 상태를 업데이트하는 통합 함수
+
+// placePiece 함수 수정
 async function placePiece(
   ctx: MutationCtx, 
   playerId: Id<"players">, 
   player: DbPlayerState
 ) {
+  // 피스 배치 전 상태 저장
+  const beforeState = {
+    board: player.board,
+    currentPiece: player.currentPiece,
+    position: player.position,
+    rotation: player.rotation,
+    nextPiece: player.nextPiece,
+    holdPiece: player.holdPiece,
+    score: player.score,
+    level: player.level,
+    lines: player.lines
+  };
+
   const board = stringToBoard(player.board);
   const newBoard = board.map(row => [...row]);
   const pieceMatrix = PIECE_ROTATIONS[player.currentPiece][player.rotation];
 
+  // 피스 배치
   for (let py = 0; py < pieceMatrix.length; py++) {
     for (let px = 0; px < pieceMatrix[py].length; px++) {
       if (pieceMatrix[py][px]) {
@@ -289,7 +395,7 @@ async function placePiece(
     return;
   }
 
-  await ctx.db.patch(playerId, {
+  const updates = {
     board: boardToString(clearedBoard),
     score: newScore,
     level: newLevel,
@@ -298,7 +404,25 @@ async function placePiece(
     nextPiece: getRandomPiece(),
     position: nextPosition,
     rotation: 0
-  });
+  };
+
+  await ctx.db.patch(playerId, updates);
+
+  // 피스 배치 후 상태로 히스토리 저장
+  const updatedPlayer = await ctx.db.get(playerId) as DbPlayerState;
+  if (updatedPlayer && player.gameId) {
+    await _saveGameHistory(ctx, {
+      gameId: player.gameId,
+      playerId,
+      action: 'down',  // 피스 배치는 'down' 액션으로 기록
+      beforeState,
+      afterState: {
+        ...beforeState,
+        ...updates
+      },
+      linesCleared
+    });
+  }
 }
 
 function stringToBoard(boardString: string): number[][] {
@@ -475,6 +599,24 @@ export const endGame = mutation({
   },
   handler: async (ctx, args) => {
     try {
+      const player = await ctx.db.get(args.playerId);
+      if (!player) throw new Error("Player not found");
+
+      const gameStartTime = Date.now() - 1000 * 60 * 5; // 임시로 5분 전으로 설정
+      
+      // 게임 결과 저장
+      await ctx.db.insert("gameResults", {
+        gameId: args.gameId,
+        playerId: args.playerId,
+        finalScore: player.score,
+        totalLines: player.lines,
+        maxCombo: 0, // TODO: 콤보 시스템 구현 시 추가
+        totalPieces: 0, // TODO: 피스 카운트 시스템 구현 시 추가
+        startTime: gameStartTime,
+        endTime: Date.now(),
+        averageSpeed: 0 // TODO: 평균 의사결정 시간 구현 시 추가
+      });
+
       // 1. 게임 상태를 finished로 변경
       await ctx.db.patch(args.gameId, {
         status: "finished",
@@ -589,7 +731,7 @@ export const moveTetrominoe = mutation({
   handler: async (ctx, args) => {
     const player = await ctx.db.get(args.playerId);
     if (!player) return;
-    // ... 나머지 코드
+    // ... 나머지 드
   }
 });
 
@@ -644,7 +786,7 @@ export const createAIPlayer = mutation({
       isAI: true  // AI 플레이어 표시
     });
 
-    // 게임에 AI 플레이어 추가
+    // 임에 AI 플레이어 추가
     const game = await ctx.db.get(args.gameId);
     if (game) {
       await ctx.db.patch(args.gameId, {
@@ -653,6 +795,125 @@ export const createAIPlayer = mutation({
     }
 
     return aiPlayerId;
+  }
+});
+
+// 게임 히스토리 저장 mutation
+export const saveGameHistory = mutation({
+  args: {
+    playerId: v.id("players"),
+    gameId: v.id("games"),
+    action: convexValidators.DIRECTIONS,
+    pieceType: convexValidators.PIECES,
+    position: v.object({
+      x: v.number(),
+      y: v.number()
+    }),
+    rotation: v.number(),
+    linesCleared: v.number(),
+    board: v.string(),
+    nextPiece: convexValidators.PIECES,
+    holdPiece: v.optional(convexValidators.PIECES),
+    score: v.number(),
+    level: v.number()
+  },
+  handler: async (ctx, args) => {
+    // 현재 게임의 마지막 시퀀스 번호 조회
+    const lastHistory = await ctx.db
+      .query("gameHistory")
+      .filter(q => q.eq(q.field("gameId"), args.gameId))
+      .order("desc")
+      .first();
+
+    const sequence = lastHistory ? (lastHistory.sequence + 1) : 0;
+
+    // 새로운 히스토리 저장
+    return await ctx.db.insert("gameHistory", {
+      playerId: args.playerId,
+      gameId: args.gameId,
+      sequence,
+      action: args.action,
+      pieceType: args.pieceType,
+      position: args.position,
+      rotation: args.rotation,
+      linesCleared: args.linesCleared,
+      board: args.board,
+      nextPiece: args.nextPiece,
+      holdPiece: args.holdPiece,
+      score: args.score,
+      level: args.level
+    });
+  }
+});
+
+// 게임 결과 저장 mutation
+export const saveGameResult = mutation({
+  args: {
+    gameId: v.id("games"),
+    playerId: v.id("players"),
+    finalScore: v.number(),
+    totalLines: v.number(),
+    maxCombo: v.number(),
+    totalPieces: v.number(),
+    startTime: v.number(),
+    endTime: v.number(),
+    averageSpeed: v.number()
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("gameResults", {
+      ...args
+    });
+  }
+});
+
+// 게임 히스토리 조회 query
+export const getGameHistory = query({
+  args: { 
+    gameId: v.id("games"),
+    limit: v.optional(v.number())
+  },
+  handler: async (ctx, args) => {
+    const query = ctx.db
+      .query("gameHistory")
+      .filter(q => q.eq(q.field("gameId"), args.gameId))
+      .order("asc");
+    
+    const results = args.limit 
+      ? await query.take(args.limit)
+      : await query.collect();
+
+    return results;
+  }
+});
+
+// 플레이어의 게임 히스토리 조회 query
+export const getPlayerHistory = query({
+  args: { 
+    playerId: v.id("players"),
+    limit: v.optional(v.number())
+  },
+  handler: async (ctx, args) => {
+    const query = ctx.db
+      .query("gameHistory")
+      .filter(q => q.eq(q.field("playerId"), args.playerId))
+      .order("desc");
+    
+    const results = args.limit 
+      ? await query.take(args.limit)
+      : await query.collect();
+
+    return results;
+  }
+});
+
+// 게임 결과 조회 query
+export const getGameResult = query({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("gameResults")
+      .filter(q => q.eq(q.field("gameId"), args.gameId))
+      .first();
   }
 });
 

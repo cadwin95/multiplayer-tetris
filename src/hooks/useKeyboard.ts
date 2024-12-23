@@ -12,13 +12,13 @@ interface KeyboardHandlers {
 }
 
 export function useKeyboard({
-  isEnabled,
+  isEnabled = true,
   onMoveLeft,
   onMoveRight,
   onMoveDown,
   onRotate,
   onHardDrop,
-  onHold,
+  onHold
 }: KeyboardHandlers) {
   useEffect(() => {
     if (!isEnabled) return;
