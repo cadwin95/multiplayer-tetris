@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import shutil
+from environment import TetrisEnv
 
 def change_to_project_root():
     """스크립트가 있는 디렉토리에서 프로젝트 루트로 이동합니다."""
@@ -94,25 +95,80 @@ action_map = {
 }
 
 def create_training_data(history):
+    print("\n=== 원본 데이터 검증 ===")
+    action_counts = {}
+    for entry in history:
+        action = entry['action']
+        action_counts[action] = action_counts.get(action, 0) + 1
+    
+    print("원본 액션 분포:")
+    for action, count in action_counts.items():
+        print(f"  - {action}: {count}개 ({count/len(history)*100:.1f}%)")
+    
+    env = TetrisEnv()
     X = []
-    y = []
+    Y = []
+    
+    # 변환된 액션 카운트 추가
+    converted_action_counts = {i: 0 for i in range(6)}
     
     for entry in history:
         try:
+            if entry['action'] not in action_map:
+                print(f"경고: 알 수 없는 액션 발견: {entry['action']}")
+                continue
+            
             # 1. 보드 상태 (200)
             board = board_string_to_matrix(entry['board']).flatten()
             
             # 2. 현재 피스 위치 매트릭스 생성 (200)
             current_piece_matrix = np.zeros((20, 10))
             piece_type = entry['pieceType']
-            pos = entry['position']
-            rotation = entry['rotation']
-            # TODO: 피스 모양과 회전을 고려하여 매트릭스에 표시
+            pos = [int(entry['position']['x']), int(entry['position']['y'])]
+            rotation = int(entry['rotation'])
+            
+            # environment.py의 PIECES 사용
+            piece_info = {
+                'type': piece_type,
+                'rotation': rotation,
+                'position': pos,
+                'shape': env.PIECES[piece_type][rotation % len(env.PIECES[piece_type])]
+            }
+            
+            # 현재 피스 위치 표시
+            shape = piece_info['shape']
+            for y in range(len(shape)):
+                for x in range(len(shape[0])):
+                    if shape[y][x]:
+                        board_y = pos[1] + y
+                        board_x = pos[0] + x
+                        if 0 <= board_y < 20 and 0 <= board_x < 10:
+                            current_piece_matrix[board_y][board_x] = 1
+            
             current_piece = current_piece_matrix.flatten()
             
             # 3. 착지 위치 매트릭스 생성 (200)
-            landing_matrix = np.zeros((20, 10))
-            # TODO: 현재 피스의 착지 위치 계산
+            landing_matrix = current_piece_matrix.copy()
+            board_matrix = board_string_to_matrix(entry['board'])
+            
+            # 피스를 아래로 이동하면서 착지 위치 계산
+            while not env._check_collision(
+                {**piece_info, 'position': [
+                    piece_info['position'][0],
+                    piece_info['position'][1] + 1
+                ]},
+                board_matrix
+            ):
+                piece_info['position'][1] += 1
+                landing_matrix = np.zeros((20, 10))
+                for y in range(len(shape)):
+                    for x in range(len(shape[0])):
+                        if shape[y][x]:
+                            board_y = piece_info['position'][1] + y
+                            board_x = piece_info['position'][0] + x
+                            if 0 <= board_y < 20 and 0 <= board_x < 10:
+                                landing_matrix[board_y][board_x] = 1
+            
             landing = landing_matrix.flatten()
             
             # 4. 다음 피스 원-핫 인코딩 (7)
@@ -127,17 +183,30 @@ def create_training_data(history):
                 next_piece      # 7
             ])
             
-            # 레이블 수정 - dtype을 명시적으로 지정
-            action = np.array(action_map[entry['action']], dtype=np.int64)
+            # 액션 매핑 디버깅
+            original_action = entry['action']
+            mapped_action = action_map[original_action]
+            converted_action_counts[mapped_action] += 1
+            
+            if mapped_action not in range(6):
+                print(f"경고: 잘못된 액션 값: {mapped_action} (원본: {original_action})")
+                continue
             
             X.append(features)
-            y.append(action)
+            Y.append(mapped_action)
             
         except Exception as e:
             print(f"데이터 처리 중 오류 발생: {e}")
             continue
-        print(X[0],y[0])
-    return np.array(X), np.array(y, dtype=np.int64)  # y의 dtype을 명시적으로 지정
+    
+    print("\n변환된 액션 분포:")
+    action_names = ['left', 'right', 'rotate', 'down', 'hardDrop', 'hold']
+    for action_id, count in converted_action_counts.items():
+        if len(Y) > 0:  # 분모가 0이 되는 것을 방지
+            percentage = (count / len(Y)) * 100
+            print(f"  - {action_names[action_id]}: {count}개 ({percentage:.1f}%)")
+    
+    return np.array(X), np.array(Y, dtype=np.int64)
 
 def main():
     try:
@@ -153,15 +222,40 @@ def main():
         print("학습 데이터 생성 중...")
         X, y = create_training_data(history)
         
+        # 저장하기 전 데이터 검증
+        print("\n=== 저장 전 최종 데이터 검증 ===")
+        print(f"X shape: {X.shape}")
+        print(f"y shape: {y.shape}")
+        print("\n액션 분포:")
+        unique, counts = np.unique(y, return_counts=True)
+        action_names = ['left', 'right', 'rotate', 'down', 'hardDrop', 'hold']
+        for action_id, count in zip(unique, counts):
+            percentage = (count / len(y)) * 100
+            print(f"  - {action_names[action_id]}: {count}개 ({percentage:.1f}%)")
+        
         # 데이터 저장
-        print("데이터 저장 중...")
-        os.makedirs('./ai/data', exist_ok=True)
-        np.save('./ai/data/X_train.npy', X)
-        np.save('./ai/data/y_train.npy', y)
+        print("\n데이터 저장 중...")
+        save_dir = './ai/data'
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 기존 파일 백업
+        for filename in ['X_train.npy', 'y_train.npy']:
+            filepath = os.path.join(save_dir, filename)
+            if os.path.exists(filepath):
+                backup_path = filepath + '.backup'
+                os.rename(filepath, backup_path)
+                print(f"기존 {filename} 파일을 {filename}.backup으로 백업했습니다.")
+        
+        # 새 데이터 저장
+        np.save(os.path.join(save_dir, 'X_train.npy'), X)
+        np.save(os.path.join(save_dir, 'y_train.npy'), y)
         
         print(f"\n생성된 학습 데이터 크기:")
         print(f"입력 (X): {X.shape}")
         print(f"출력 (y): {y.shape}")
+        
+        # 저장된 데이터 확인
+        print("\n저장된 데이터 확인")
         
     except Exception as e:
         print(f"오류 발생: {e}")

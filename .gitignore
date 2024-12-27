@@ -38,6 +38,13 @@ ai/*.onnx
 ai/runs/
 ai/training_progress*.png
 ai/checkpoints/
+ai/models/
+ai/logs/
+ai/data/*.npy
+ai/data/*.npz
+ai/data/*.pkl
+ai/data/*.json
+ai/wandb/
 
 # Python
 *.pyc
@@ -45,6 +52,8 @@ __pycache__/
 .pytest_cache/
 .coverage
 .python-version
+*.egg-info/
+.eggs/
 
 # Virtual Environment
 venv/
@@ -57,6 +66,7 @@ env/
 .vscode/
 *.swp
 *.swo
+*~
 
 # Logs and databases
 *.log
@@ -64,7 +74,36 @@ env/
 tensorboard/
 runs/
 
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build and cache
+*.cache/
+.eslintcache
+.parcel-cache
+.next/
+out/
+.nuxt/
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+
 # Data files
 ai/data/*.npy
 data.zip
+<<<<<<< Updated upstream
 .env.local
+=======
+*.csv
+*.xlsx
+*.xls
+*.h5
+*.hdf5
+>>>>>>> Stashed changes
