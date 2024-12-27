@@ -3,6 +3,7 @@ import { NicknameInput } from '../components/auth/NicknameInput';
 import '../styles/tetris.css';
 import { useState, useEffect } from 'react';
 import { useGameCreation } from '../hooks/useGameCreation';
+import { FloatingBoards } from '../components/game/FloatingBoards';
 
 export default function Home() {
   const { startGame } = useGameCreation();
@@ -22,8 +23,9 @@ export default function Home() {
 
   if (!hasNickname) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="w-full max-w-md">
+      <div className="min-h-screen bg-gradient-to-b from-[#1a1a2e] to-[#16213e] flex items-center justify-center">
+        <FloatingBoards />
+        <div className="w-full max-w-md relative z-10">
           <NicknameInput onSubmit={handleNicknameSubmit} />
         </div>
       </div>
@@ -31,8 +33,9 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-      <div className="space-y-6 w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-b from-[#1a1a2e] to-[#16213e] flex items-center justify-center">
+      <FloatingBoards />
+      <div className="space-y-6 w-full max-w-md relative z-10">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">Tetris</h1>
           <p className="text-gray-400">

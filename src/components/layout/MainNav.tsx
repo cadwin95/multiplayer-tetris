@@ -15,8 +15,8 @@ export function MainNav() {
   };
 
   return (
-    <div className="fixed w-full top-0 left-0 z-40">
-      <div className="flex justify-between items-center px-6 py-3 bg-gray-900/80 backdrop-blur-sm">
+    <div className="fixed w-full top-0 left-0 z-50">
+      <div className="flex justify-between items-center px-6 py-3 bg-gray-900/90 backdrop-blur-sm">
         <Link to="/" className="text-[#00f0ff] text-2xl font-bold hover:text-[#00ff87] transition-colors">
           HOME
         </Link>

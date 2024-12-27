@@ -37,7 +37,7 @@ export function MiniBoard({ board, currentPiece, boardSize }: MiniBoardProps) {
 
   return (
     <div 
-      className="grid gap-[1px] bg-black/30 p-[1px] rounded-sm"
+      className="grid gap-[1px] bg-black/30 p-[1px] rounded-sm w-full h-full"
       style={{
         gridTemplateColumns: `repeat(${boardSize.width}, minmax(0, 1fr))`
       }}
@@ -48,13 +48,16 @@ export function MiniBoard({ board, currentPiece, boardSize }: MiniBoardProps) {
           className="aspect-square rounded-[1px]"
           style={{
             backgroundColor: cell === 2 && currentPiece 
-              ? `${PIECE_COLORS[currentPiece.type]}66`
+              ? PIECE_COLORS[currentPiece.type]
               : cell === 1 
-                ? '#4A556855' 
+                ? '#4A5568' 
                 : '#1A202C22',
             boxShadow: cell === 2 && currentPiece
-              ? `0 0 12px ${PIECE_COLORS[currentPiece.type]}99`
-              : 'none'
+                ? `inset 0 0 2px rgba(255,255,255,0.5), 0 0 12px ${PIECE_COLORS[currentPiece.type]}99`
+                : 'inset 0 0 1px rgba(255,255,255,0.2)',
+            borderColor: cell === 2 && currentPiece
+              ? `${PIECE_COLORS[currentPiece.type]}99`
+              : 'rgba(255,255,255,0.1)'
           }}
         />
       ))}

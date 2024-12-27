@@ -1,39 +1,31 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Id } from "../../../convex/_generated/dataModel";
 import { useGameState } from '../../hooks/useGameState';
-import { useKeyboard } from '../../hooks/useKeyboard';
 import { GameOver } from './GameOver';
-import { useGameTimer } from '../../hooks/useGameTimer';
-import { MiniBoard, MiniBoardProps } from './MiniBoard';
-import { PIECE_ROTATIONS, PIECE_COLORS, PieceType } from '../../../convex/schema';
+import { MiniBoard } from './MiniBoard';
+import { PIECE_ROTATIONS, PIECE_COLORS } from '../../../convex/schema';
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { Doc } from "../../../convex/_generated/dataModel";
+import { useGameTimer } from '../../hooks/useGameTimer';
+import { useMutation } from "convex/react";
+
+
+
 
 interface GameScreenProps {
   gameId: Id<"games">;
   playerId: Id<"players">;
   isMinimized?: boolean;
+  isLoading?: boolean;
 }
 
-interface FloatingBoard {
-  id: number;
-  x: number;
-  y: number;
-  speed: number;
-  direction: number;
-  piece: PieceType;
-  rotation: number;
-}
 
-export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreenProps) {
-  const { state, move, error, isLoading } = useGameState(gameId, playerId);
+
+export function GameScreen({ gameId, playerId, isMinimized = false, isLoading = false }: GameScreenProps) {
+  const { state, error, isLoading: gameStateLoading } = useGameState(gameId, playerId);
   const navigate = useNavigate();
   const game = useQuery(api.games.getGame, { gameId });
-  const isAIPlayer = (game?.players as Doc<"players">[] | undefined)?.find(p => p._id === playerId)?.isAI;
-  const [floatingBoards, setFloatingBoards] = useState<FloatingBoard[]>([]);
-
   // Hold/Next 피스 props 준비
   const holdPieceProps = {
     board: "0".repeat(16),
@@ -54,39 +46,8 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
     },
     boardSize: { width: 4, height: 4 }
   };
-
-  useGameTimer(
-    () => {
-      if (state.status === 'playing') {
-        move('down');
-      }
-    },
-    state.level,
-    state.status === 'playing' && !isMinimized
-  );
-
-  useKeyboard({
-    isEnabled: !isAIPlayer && state.status === 'playing' && !isMinimized,
-    onMoveLeft: () => {
-      move('left');
-    },
-    onMoveRight: () => {
-      move('right');
-    },
-    onMoveDown: () => {
-      move('down');
-    },
-    onRotate: () => {
-      move('rotate');
-    },
-    onHardDrop: () => {
-      move('hardDrop');
-    },
-    onHold: () => {
-      move('hold');
-    }
-  });
-
+  
+  const moveTetrominoe = useMutation(api.games.handleGameAction);   
   // 고스트 피스 위치 계산
   const ghostPiecePosition = useMemo(() => {
     if (!state.currentPiece) return null;
@@ -125,7 +86,21 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
       position: { ...state.currentPiece.position, y: ghostY - 1 }
     };
   }, [state.currentPiece, state.board]);
-
+    // 자동 하강 타이머
+    useGameTimer(
+      () => {
+        if (state.status === 'playing') {
+          moveTetrominoe({
+            gameId,
+            playerId,
+            action: 'down'
+          });
+        }
+      },
+      state.level,
+      state.status === 'playing' && !gameStateLoading
+    );
+  
   // 상태 로깅 추가
   useEffect(() => {
     console.log('Game Status:', state.status);
@@ -133,104 +108,37 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
     console.log('Game Data:', game);
   }, [state.status, state, game]);
 
-  // 떠다니는 미니보드 초기화
-  useEffect(() => {
-    const pieces = Object.keys(PIECE_ROTATIONS) as PieceType[];
-    const boards: FloatingBoard[] = Array(8).fill(null).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      speed: 0.2 + Math.random() * 0.3,
-      direction: Math.random() * Math.PI * 2,
-      piece: pieces[Math.floor(Math.random() * pieces.length)],
-      rotation: Math.floor(Math.random() * 4)
-    }));
-    setFloatingBoards(boards);
-  }, []);
+  // 떠다니는 미니보드 초기화 (멀티플레이어 모드에서만)
 
-  // 미니보드 움직임 애니메이션
-  useEffect(() => {
-    if (state.status !== 'playing') return;
 
-    const interval = setInterval(() => {
-      setFloatingBoards(prev => prev.map(board => {
-        let newX = board.x + Math.cos(board.direction) * board.speed;
-        let newY = board.y + Math.sin(board.direction) * board.speed;
-
-        if (newX < 0 || newX > 100) {
-          board.direction = Math.PI - board.direction;
-          newX = board.x;
-        }
-        if (newY < 0 || newY > 100) {
-          board.direction = -board.direction;
-          newY = board.y;
-        }
-
-        return {
-          ...board,
-          x: newX,
-          y: newY
-        };
-      }));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [state.status]);
-
-  if (isLoading) return <div className="text-white text-center">Loading...</div>;
+  if (isLoading || gameStateLoading) return <div className="text-white text-center">Loading...</div>;
   if (error) return <div className="text-white text-center">Error: {error?.message}</div>;
   if (!state) return <div className="text-white text-center">No game state</div>;
 
   return (
-    <div className="game-screen h-screen w-screen flex items-center justify-center bg-[#1a1a2e]/90">
-      {/* 배경 미니보드들 - 멀티플레이어 모드에서만 표시 */}
-      {game?.mode === 'multi' && (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {floatingBoards.map(board => {
-            const miniBoardProps: MiniBoardProps = {
-              board: "0".repeat(16),
-              currentPiece: {
-                type: board.piece,
-                rotation: board.rotation,
-                position: { x: 0, y: 0 }
-              },
-              boardSize: { width: 4, height: 4 }
-            };
-            
-            return (
-              <div
-                key={board.id}
-                className="absolute w-20 h-20 transition-all duration-[3000ms] ease-in-out opacity-30"
-                style={{
-                  left: `${board.x}%`,
-                  top: `${board.y}%`,
-                  transform: 'translate(-50%, -50%) rotate(' + (board.direction * 180 / Math.PI) + 'deg)',
-                  filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.2))',
-                }}
-              >
-                <MiniBoard {...miniBoardProps} />
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div className={`game-screen flex items-center justify-center bg-[#1a1a2e]/90 ${
+      isMinimized ? 'w-full h-full' : 'h-[88vh] w-[71vh]'
+    }`}>
 
-      <div className="relative h-[90vh] aspect-[3/4] bg-black/60 backdrop-blur-sm rounded-lg border border-white/10 shadow-2xl">
+      <div className={`relative ${
+        isMinimized ? 'w-full h-full' : 'h-[88vh] w-[71vh]'
+
+      } bg-black/60 backdrop-blur-sm rounded-lg border border-white/10 shadow-2xl`}>
         {/* 사이드 정보 패널 */}
-        <div className="absolute right-4 h-full py-4 flex flex-col justify-between">
+        <div className="absolute right-0 h-full py04 flex flex-col justify-between">
           {/* Hold */}
-          <div className="bg-black/50 backdrop-blur-md p-4 rounded-lg border border-white/10">
-            <div className="text-gray-400 text-sm mb-2 font-mono">HOLD</div>
-            <div className="w-24 h-24 border border-white/10 rounded-md overflow-hidden">
+          <div className="bg-black/80 backdrop-blur-md p-4 rounded-lg border border-white/30">
+            <div className="text-gray-200 text-sm mb-2 font-mono text-center">HOLD</div>
+            <div className="w-20 h-20 border border-white/30 rounded-md overflow-hidden">
               {state.holdPiece && <MiniBoard {...holdPieceProps} />}
             </div>
           </div>
 
           {/* Next */}
-          <div className="bg-black/50 backdrop-blur-md p-4 rounded-lg border border-white/10">
-            <div className="text-gray-400 text-sm mb-2 font-mono">NEXT</div>
-            <div className="w-24 h-24 border border-white/10 rounded-md overflow-hidden">
-             {state.nextPiece && <MiniBoard {...nextPieceProps} />}
+          <div className="bg-black/80 backdrop-blur-md p-4 rounded-lg border border-white/30">
+            <div className="text-gray-200 text-sm mb-2 font-mono">NEXT</div>
+            <div className="w-20 h-20 border border-white/30 rounded-md overflow-hidden">
+              {state.nextPiece && <MiniBoard {...nextPieceProps} />}
             </div>
           </div>
 
@@ -253,14 +161,12 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
           </div>
         </div>
 
-        {/* 게임 제목 */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 text-xl text-gray-400 font-mono tracking-widest">
-          TETRIS AI
-        </div>
 
         {/* 메인 게임 보드 */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="game-grid h-full aspect-[1/2] border-[1px] border-white/10 rounded-lg overflow-hidden bg-black/50 backdrop-blur-md">
+          <div className={`game-grid ${
+            isMinimized ? 'h-[80%] w-[35%]' : 'h-[90%] w-[61%]'
+          } border-[1px] border-white/10 rounded-lg overflow-hidden bg-black/50 backdrop-blur-md`}>
             {Array(20).fill(null).map((_, y) => 
               Array(10).fill(null).map((_, x) => {
                 const cell = state.board[y * 10 + x];

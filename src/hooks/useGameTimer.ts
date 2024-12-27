@@ -11,7 +11,7 @@ export function useGameTimer(
   useEffect(() => {
     if (!isEnabled) return;
 
-    const dropSpeed = Math.max(50, 800 - (level * 50));
+    const dropSpeed = Math.max(50, 1000 - (level * 100));
     
     const tick = () => {
       const now = Date.now();
