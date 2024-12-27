@@ -47,13 +47,11 @@ export const createPlayer = mutation({
       board: "0".repeat(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH * GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT),
       currentPiece: getRandomPiece(),
       nextPiece: getRandomPiece(),
-      holdPiece: null,
       position: { x: 4, y: 0 },
       rotation: 0,
       isPlaying: false,
       isReady: false,
-      garbageLines: 0,
-      gameId: null
+      garbageLines: 0
     });
   }
 });
@@ -129,7 +127,7 @@ export const getPlayerIds = query({
   },
 });
 
-// 게임 히스토리 저장 함수 추가
+// 게임 히스토리 저장 함수 수정
 async function _saveGameHistory(
   ctx: MutationCtx,
   args: {
@@ -199,37 +197,153 @@ export const handleGameAction = mutation({
     action: convexValidators.DIRECTIONS
   },
   handler: async (ctx, args) => {
+    console.log('Action received:', args.action);
+    
     const player = await ctx.db.get(args.playerId);
     if (!player) throw new Error("Player not found");
+    
+    // 액션 실행 전 상태 저장 (타입 호환성 보장)
+    const beforeState = {
+      board: player.board,
+      currentPiece: player.currentPiece,
+      position: player.position,
+      rotation: player.rotation,
+      nextPiece: player.nextPiece,
+      holdPiece: player.holdPiece,
+      score: player.score,
+      level: player.level,
+      lines: player.lines
+    };
 
-    // 게임 로직 처리 (이전 코드 유지)
-    // ...
+    // hold 액션 처리
+    if (args.action === 'hold') {
+      const currentPiece = player.currentPiece;
+      const holdPiece = player.holdPiece;
+      const nextPiece = player.nextPiece;
 
-    // 라인 클리어 처리
+      const updates = {
+        currentPiece: holdPiece || nextPiece,
+        nextPiece: holdPiece ? getRandomPiece() : nextPiece,
+        holdPiece: currentPiece,
+        position: { x: 4, y: 0 },
+        rotation: 0
+      };
+
+      await ctx.db.patch(args.playerId, updates);
+      
+      // 히스토리 저장
+      if (player.gameId) {
+        await _saveGameHistory(ctx, {
+          gameId: player.gameId,
+          playerId: args.playerId,
+          action: args.action,
+          beforeState,
+          afterState: {
+            ...beforeState,
+            ...updates
+          },
+          linesCleared: 0
+        });
+      }
+
+      return { clearedLines: 0, success: true };
+    }
+
     const board = stringToBoard(player.board);
-    const { updatedBoard: newBoard, linesCleared } = clearLines(board);
+    const newPosition = { ...player.position };
+    let newRotation = player.rotation;
 
-    if (linesCleared > 0) {
-      const currentScore = Math.max(0, player.score);
-      const currentLevel = Math.max(1, player.level);
-      const currentLines = Math.max(0, player.lines);
+    // 나머지 액션 처리
+    switch (args.action) {
+      case 'left':
+        newPosition.x -= 1;
+        break;
+      case 'right':
+        newPosition.x += 1;
+        break;
+      case 'down':
+        newPosition.y += 1;
+        break;
+      case 'rotate':
+        newRotation = (newRotation + 1) % 4;
+        break;
+      case 'hardDrop':
+        while (!checkCollision(
+          board,
+          player.currentPiece,
+          newPosition.x,
+          newPosition.y + 1,
+          newRotation
+        )) {
+          newPosition.y += 1;
+        }
+        // hardDrop 후 바로 피스 배치
+        if (player.gameId) {
+          await _saveGameHistory(ctx, {
+            gameId: player.gameId,
+            playerId: args.playerId,
+            action: args.action,
+            beforeState,
+            linesCleared: 0
+          });
+        }
+        await placePiece(ctx, args.playerId, {
+          ...player,
+          position: newPosition,
+          rotation: newRotation,
+          gameId: args.gameId
+        });
+        return { clearedLines: 0, success: true };
+    }
 
-      const additionalScore = calculateScore(linesCleared, currentLevel);
-      const newLines = currentLines + linesCleared;
-      const newLevel = Math.floor(newLines / 10) + 1;
+    // 충돌 체크 (hardDrop은 이미 처리되었으므로 down만 체크)
+    if (checkCollision(board, player.currentPiece, newPosition.x, newPosition.y, newRotation)) {
+      if (args.action === 'down') {
+        // 히스토리 저장
+        if (player.gameId) {
+          await _saveGameHistory(ctx, {
+            gameId: player.gameId,
+            playerId: args.playerId,
+            action: args.action,
+            beforeState,
+            linesCleared: 0
+          });
+        }
+        
+        // 피스 배치
+        await placePiece(ctx, args.playerId, {
+          ...player,
+          gameId: args.gameId
+        });
+        return { clearedLines: 0, success: true };
+      }
+      return { clearedLines: 0, success: false };
+    }
 
-      await ctx.db.patch(args.playerId, {
-        board: boardToString(newBoard),
-        score: currentScore + additionalScore,
-        level: newLevel,
-        lines: newLines
+    // 상태 업데이트
+    const updates = {
+      position: newPosition,
+      rotation: newRotation
+    };
+    
+    await ctx.db.patch(args.playerId, updates);
+    
+    // 히스토리 저장
+    if (player.gameId) {
+      await _saveGameHistory(ctx, {
+        gameId: player.gameId,
+        playerId: args.playerId,
+        action: args.action,
+        beforeState,
+        afterState: {
+          ...beforeState,
+          ...updates
+        },
+        linesCleared: 0
       });
     }
 
-    return {
-      clearedLines: linesCleared,
-      success: true
-    };
+    return { clearedLines: 0, success: true };
   }
 });
 
@@ -532,7 +646,7 @@ export const endGame = mutation({
 
       for (const player of players) {
         await ctx.db.patch(player._id, {
-          gameId: null,
+          gameId: undefined,
           isPlaying: false,
           isReady: false,
           score: 0,
@@ -541,7 +655,7 @@ export const endGame = mutation({
           board: "0".repeat(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH * GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT),
           currentPiece: getRandomPiece(),
           nextPiece: getRandomPiece(),
-          holdPiece: null,
+          holdPiece: undefined,
           position: { x: 4, y: 0 },
           rotation: 0,
           garbageLines: 0
@@ -622,20 +736,6 @@ export const getPlayers = query({
   }
 });
 
-// moveTetrominoe mutation 수정
-export const moveTetrominoe = mutation({
-  args: {
-    gameId: v.id("games"),
-    playerId: v.id("players"),
-    direction: convexValidators.DIRECTIONS
-  },
-  handler: async (ctx, args) => {
-    const player = await ctx.db.get(args.playerId);
-    if (!player) return;
-    // ... 나머지 드
-  }
-});
-
 // startGame mutation 추가
 export const startGame = mutation({
   args: { gameId: v.id("games") },
@@ -677,13 +777,12 @@ export const createAIPlayer = mutation({
       board: "0".repeat(GAME_VALUES.INITIAL_BOARD_SIZE.WIDTH * GAME_VALUES.INITIAL_BOARD_SIZE.HEIGHT),
       currentPiece: getRandomPiece(),
       nextPiece: getRandomPiece(),
-      holdPiece: null,
       position: { x: 4, y: 0 },
       rotation: 0,
       isPlaying: false,
       isReady: false,
       garbageLines: 0,
-      isAI: true  // AI 플레이어 표시
+      isAI: true
     });
 
     // 임에 AI 플레이어 추가

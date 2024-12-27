@@ -75,7 +75,7 @@ export const gameTableSchema = v.object({
 
 // 2. 플레이어 테이블 스키마 정의
 export const playerTableSchema = v.object({
-  gameId: v.union(v.id("games"), v.null()),
+  gameId: v.optional(v.id("games")),
   playerName: v.string(),
   score: v.number(),
   level: v.number(),
@@ -83,7 +83,7 @@ export const playerTableSchema = v.object({
   board: v.string(),
   currentPiece: convexValidators.PIECES,
   nextPiece: convexValidators.PIECES,
-  holdPiece: v.union(convexValidators.PIECES, v.null()),
+  holdPiece: v.optional(convexValidators.PIECES),
   position: v.object({
     x: v.number(),
     y: v.number()

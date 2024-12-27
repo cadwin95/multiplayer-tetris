@@ -5,7 +5,6 @@ import { useGameState } from '../../hooks/useGameState';
 import { useKeyboard } from '../../hooks/useKeyboard';
 import { GameOver } from './GameOver';
 import { useGameTimer } from '../../hooks/useGameTimer';
-import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { MiniBoard, MiniBoardProps } from './MiniBoard';
 import { PIECE_ROTATIONS, PIECE_COLORS, PieceType } from '../../../convex/schema';
 import { useQuery } from "convex/react";
@@ -31,7 +30,6 @@ interface FloatingBoard {
 export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreenProps) {
   const { state, move, error, isLoading } = useGameState(gameId, playerId);
   const navigate = useNavigate();
-  const { startMeasurement, measureLatency } = usePerformanceMonitor();
   const game = useQuery(api.games.getGame, { gameId });
   const isAIPlayer = (game?.players as Doc<"players">[] | undefined)?.find(p => p._id === playerId)?.isAI;
   const [floatingBoards, setFloatingBoards] = useState<FloatingBoard[]>([]);
@@ -70,36 +68,24 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
   useKeyboard({
     isEnabled: !isAIPlayer && state.status === 'playing' && !isMinimized,
     onMoveLeft: () => {
-      startMeasurement();
       move('left');
     },
     onMoveRight: () => {
-      startMeasurement();
       move('right');
     },
     onMoveDown: () => {
-      startMeasurement();
       move('down');
     },
     onRotate: () => {
-      startMeasurement();
       move('rotate');
     },
     onHardDrop: () => {
-      startMeasurement();
       move('hardDrop');
     },
     onHold: () => {
-      startMeasurement();
       move('hold');
     }
   });
-
-  useEffect(() => {
-    if (state.status === 'playing') {
-      measureLatency();
-    }
-  }, [state.board, state.status, measureLatency]);
 
   // 고스트 피스 위치 계산
   const ghostPiecePosition = useMemo(() => {
@@ -186,7 +172,7 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
           y: newY
         };
       }));
-    }, 50);
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [state.status]);
@@ -244,7 +230,7 @@ export function GameScreen({ gameId, playerId, isMinimized = false }: GameScreen
           <div className="bg-black/50 backdrop-blur-md p-4 rounded-lg border border-white/10">
             <div className="text-gray-400 text-sm mb-2 font-mono">NEXT</div>
             <div className="w-24 h-24 border border-white/10 rounded-md overflow-hidden">
-              <MiniBoard {...nextPieceProps} />
+             {state.nextPiece && <MiniBoard {...nextPieceProps} />}
             </div>
           </div>
 

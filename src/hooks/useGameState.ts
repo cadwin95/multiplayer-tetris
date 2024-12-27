@@ -3,6 +3,7 @@ import { api } from "../../convex/_generated/api";
 import { DirectionType, PieceType, GameStatus } from '../../convex/schema';
 import { Id } from "../../convex/_generated/dataModel";
 import { useState } from "react";
+import { getRandomPiece } from "../../convex/games";
 
 interface Piece {
   type: PieceType;
@@ -43,12 +44,12 @@ export function useGameState(gameId: Id<"games">, playerId: Id<"players">): Game
   const state: GameState = {
     board: player?.board ?? "0".repeat(200),
     currentPiece: {
-      type: (player?.currentPiece ?? 'I') as PieceType,
+      type: (player?.currentPiece ?? getRandomPiece() as PieceType),
       rotation: player?.rotation ?? 0,
       position: player?.position ?? { x: 4, y: 0 }
     },
     nextPiece: {
-      type: (player?.nextPiece ?? 'I') as PieceType,
+      type: (player?.nextPiece ?? getRandomPiece() as PieceType),
       rotation: 0,
       position: { x: 4, y: 0 }
     },
@@ -58,8 +59,8 @@ export function useGameState(gameId: Id<"games">, playerId: Id<"players">): Game
       position: { x: 4, y: 0 }
     } : null,
     score: Math.max(0, player?.score ?? 0),
-    level: Math.max(1, player?.level ?? 1),
-    lines: Math.max(0, player?.lines ?? 0),
+    level: Math.max(1, player?.level ?? 1), // 레벨은 1 이상이어야 함
+    lines: Math.max(0, player?.lines ?? 0), // 라인 수는 0 이상이어야 함
     status: game?.status ?? 'waiting'
   };
 
@@ -67,10 +68,10 @@ export function useGameState(gameId: Id<"games">, playerId: Id<"players">): Game
     try {
       setError(null);
       const result = (await handleGameAction({
-        gameId,
-        playerId,
-        action: direction
-      }) as unknown) as GameActionResult;  // unknown을 통해 안전하게 타입 변환
+        gameId: gameId as Id<"games">, 
+        playerId: playerId as Id<"players">,
+        action: direction as DirectionType
+      })) as unknown as GameActionResult;  // unknown을 통해 안전하게 타입 변환
 
       if (result?.clearedLines > 0) {
         // 서버에서 자동으로 점수가 업데이트되므로,
