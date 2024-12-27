@@ -99,11 +99,18 @@ out/
 ai/data/*.npy
 data.zip
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 .env.local
 =======
+=======
+>>>>>>> Stashed changes
 *.csv
 *.xlsx
 *.xls
 *.h5
+<<<<<<< Updated upstream
+*.hdf5
+>>>>>>> Stashed changes
+=======
 *.hdf5
 >>>>>>> Stashed changes
