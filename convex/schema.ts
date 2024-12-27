@@ -25,7 +25,7 @@ export type DirectionType = typeof GAME_VALUES.DIRECTIONS[number];
 // 상수 export
 export const { PIECES: PIECE_VALUES } = GAME_VALUES;
 
-// 2. 타입 스크립트 ��용 정의
+// 2. 타입 스크립트 용 정의
 export interface tsValidators { 
   STATUS: typeof GAME_VALUES.STATUS[number]; // 예시 : "waiting" | "ready" | "playing" | "paused" | "finished"
   MODES: typeof GAME_VALUES.MODES[number]; // 예시 : "solo" | "multi"
@@ -75,15 +75,15 @@ export const gameTableSchema = v.object({
 
 // 2. 플레이어 테이블 스키마 정의
 export const playerTableSchema = v.object({
-  gameId: v.optional(v.id("games")),
+  gameId: v.union(v.id("games"), v.null()),
   playerName: v.string(),
-  score: v.number(),  
+  score: v.number(),
   level: v.number(),
   lines: v.number(),
   board: v.string(),
   currentPiece: convexValidators.PIECES,
   nextPiece: convexValidators.PIECES,
-  holdPiece: v.optional(convexValidators.PIECES),
+  holdPiece: v.union(convexValidators.PIECES, v.null()),
   position: v.object({
     x: v.number(),
     y: v.number()

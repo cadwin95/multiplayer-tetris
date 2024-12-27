@@ -216,7 +216,7 @@
 /* 게임 레이아웃 */
 .game-screen {
   @apply relative;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 8px;
 }
 
@@ -247,7 +247,7 @@
   width: 30px;
   height: 30px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 /* 테트로미노 색상 */
@@ -426,20 +426,74 @@
 }
 
 .game-grid {
-  @apply grid grid-cols-10 gap-px;
-  aspect-ratio: 1/2;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 1px;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .game-cell {
-  @apply aspect-square;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(0, 0, 0, 0.3);
+  aspect-ratio: 1;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.1s;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .game-cell.filled {
-  @apply transition-colors duration-100;
+  border: none;
+  box-shadow: 
+    inset -3px -3px 2px rgba(0, 0, 0, 0.3),
+    inset 3px 3px 2px rgba(255, 255, 255, 0.5);
+}
+
+/* 고스트 피스 스타일 개선 */
+.game-cell.ghost:not(.filled) {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.3),
+    rgba(255, 255, 255, 0.3) 4px,
+    rgba(255, 255, 255, 0.4) 4px,
+    rgba(255, 255, 255, 0.4) 8px
+  );
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.3);
+}
+
+/* 각 블록 타입별 스타일 */
+.piece-I {
+  background: linear-gradient(135deg, #00f0f0 0%, #00d8d8 100%);
+}
+
+.piece-O {
+  background: linear-gradient(135deg, #f0f000 0%, #d8d800 100%);
+}
+
+.piece-T {
+  background: linear-gradient(135deg, #a000f0 0%, #8000d8 100%);
+}
+
+.piece-S {
+  background: linear-gradient(135deg, #00f000 0%, #00d800 100%);
+}
+
+.piece-Z {
+  background: linear-gradient(135deg, #f00000 0%, #d80000 100%);
+}
+
+.piece-J {
+  background: linear-gradient(135deg, #0000f0 0%, #0000d8 100%);
+}
+
+.piece-L {
+  background: linear-gradient(135deg, #f0a000 0%, #d88000 100%);
+}
+
+/* 고스트 피스 스타일 */
+.game-cell.ghost {
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  background: transparent;
+  box-shadow: none;
 }
 
 .stats-display {
@@ -600,7 +654,8 @@
 
 /* 게임 그리드 */
 .game-grid {
-  @apply grid grid-cols-10 gap-px bg-black/30;
+  @apply grid grid-cols-10 gap-px;
+  background: rgba(0, 0, 0, 0.1);
   aspect-ratio: 1/2;
 }
 
@@ -625,7 +680,11 @@
 }
 
 .mini-board {
-  width: 150px;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 1px;
+  background: #000;
 }
 
 .mini-preview-box {
@@ -636,4 +695,125 @@
 .mini-preview-title {
   @apply text-white text-xs font-bold mb-1 text-center;
   font-family: 'Press Start 2P', monospace;
+}
+
+/* 강철 액자 스타일 */
+.steel-frame {
+  background: linear-gradient(45deg, #2d3748, #4a5568);
+  border: 2px solid #718096;
+  box-shadow: 
+    inset 0 0 10px rgba(0, 0, 0, 0.5),
+    0 0 0 2px #2d3748,
+    0 0 10px rgba(0, 0, 0, 0.5);
+  position: relative;
+  padding: 4px;
+}
+
+.steel-frame::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  background: linear-gradient(45deg, #718096, #4a5568);
+  z-index: -1;
+  border-radius: 4px;
+}
+
+.steel-frame-inner {
+  background: #1a202c;
+  border: 1px solid #4a5568;
+  height: 100%;
+}
+
+/* 볼트 장식 */
+.bolt {
+  width: 8px;
+  height: 8px;
+  background: #718096;
+  border-radius: 50%;
+  position: absolute;
+  box-shadow: inset -1px -1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.bolt-tl { top: 4px; left: 4px; }
+.bolt-tr { top: 4px; right: 4px; }
+.bolt-bl { bottom: 4px; left: 4px; }
+.bolt-br { bottom: 4px; right: 4px; }
+
+/* 아케이드 스타일 프레임 */
+.arcade-frame {
+  background: #1a1a1a;
+  border: 4px solid #ff6b6b;
+  box-shadow: 
+    0 0 20px #ff6b6b,
+    inset 0 0 20px rgba(0, 0, 0, 0.5);
+  padding: 30px;
+  position: relative;
+  border-radius: 10px;
+  min-width: 800px;
+}
+
+/* 사이드 패널 스타일 */
+.side-panel {
+  background: #000;
+  border: 2px solid #9c27b0;
+  border-radius: 8px;
+  padding: 15px;
+  position: relative;
+  box-shadow: 0 0 15px rgba(156, 39, 176, 0.3);
+  width: 150px;
+}
+
+.side-panel-title {
+  color: #ff79c6;
+  font-family: 'Press Start 2P', monospace;
+  text-align: center;
+  margin-bottom: 8px;
+  text-shadow: 0 0 5px #ff79c6;
+}
+
+/* 점수 표시 스타일 */
+.score-display {
+  position: absolute;
+  left: -250px;
+  bottom: 50px;
+  color: #ff9800;
+  font-family: 'Press Start 2P', monospace;
+  text-shadow: 0 0 8px #ff9800;
+}
+
+.score-value {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.score-label {
+  font-size: 16px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+
+/* 게임 제목 */
+.game-title {
+  position: absolute;
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #ff79c6;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 24px;
+  text-shadow: 0 0 15px #ff79c6;
+}
+
+/* 다른 플레이어 화면 스타일 */
+.minimized .arcade-frame {
+  transform: scale(0.5);
+  opacity: 0.8;
+}
+
+/* 사이드 패널 배경 밝기 조정 */
+.side-panel > div {
+  background: rgba(0, 0, 0, 0.3);
 }

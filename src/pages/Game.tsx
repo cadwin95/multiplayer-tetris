@@ -1,99 +1,153 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
 import { useParams } from 'react-router-dom';
-import { useEffect } from 'react';
-import { WaitingRoom } from '../components/lobby/WaitingRoom';
-import { AIPlayer } from '../components/game/AIPlayer';
 import { GameScreen } from '../components/game/GameScreen';
+import { AIPlayer } from '../components/game/AIPlayer';
+import { WaitingRoom } from '../components/lobby/WaitingRoom';
+import { Id } from "../../convex/_generated/dataModel";
 
 export default function Game() {
-  const { gameId: urlGameId } = useParams();
-  const playerId = localStorage.getItem('playerId') as Id<"players">;
+  const { gameId } = useParams<{ gameId: string }>();
+  const playerId = localStorage.getItem('playerId') as Id<"players"> | null;
   
-  const game = useQuery(api.games.getGame, { gameId: urlGameId as Id<"games"> });
-  const players = useQuery(api.games.getPlayers, { gameId: urlGameId as Id<"games"> });
-  
+  const game = useQuery(api.games.getGame, { 
+    gameId: gameId as Id<"games"> 
+  });
+  const players = useQuery(api.games.getPlayers, { 
+    gameId: gameId as Id<"games"> 
+  });
   const setReady = useMutation(api.games.setReady);
-  const startGameAfterDelay = useMutation(api.games.startGameAfterDelay);
 
-  useEffect(() => {
-    if (game?.status === "ready") {
-      const timer = setTimeout(async () => {
-        await startGameAfterDelay({ gameId: urlGameId as Id<"games"> });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [game?.status, startGameAfterDelay, urlGameId]);
-
-  // AI 플레이어 확인 및 찾기
-  const aiPlayer = players?.find(p => p.isAI);
-  const humanPlayer = players?.find(p => p._id === playerId);
-
-  if (!game || !players) {
+  if (!game || !players || !playerId) {
     return <div className="text-white text-center">Loading...</div>;
   }
 
   if (game.status === 'waiting') {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <WaitingRoom 
-          players={players.map(p => ({
-            id: p._id,
-            name: p.playerName,
-            isReady: p.isReady
-          }))}
-          currentPlayerId={playerId}
-          onReady={() => setReady({
-            gameId: urlGameId as Id<"games">,
-            playerId
-          })}
-        />
-      </div>
+      <WaitingRoom 
+        players={players.map(p => ({
+          id: p._id,
+          name: p.playerName,
+          isReady: p.isReady || false
+        }))}
+        currentPlayerId={playerId}
+        onReady={() => setReady({
+          gameId: gameId as Id<"games">,
+          playerId
+        })}
+      />
     );
   }
 
+  const isAIGame = game.mode === 'ai';
+  const aiPlayer = players.find(p => p.isAI);
+  const currentPlayer = players.find(p => p._id === playerId);
+  const otherPlayers = players.filter(p => p._id !== playerId);
+
+  // 다른 플레이어 화면 위치 계산
+  const getRandomPosition = (index: number) => {
+    // 화면을 8개의 구역으로 나누고, 각 구역에 하나씩 배치
+    const positions = [
+      'top-4 left-4',        // 좌상단
+      'top-4 right-4',       // 우상단
+      'bottom-4 left-4',     // 좌하단
+      'bottom-4 right-4',    // 우하단
+      'top-4 left-1/3',      // 상단 왼쪽
+      'top-4 right-1/3',     // 상단 오른쪽
+      'bottom-4 left-1/3',   // 하단 왼쪽
+      'bottom-4 right-1/3'   // 하단 오른쪽
+    ];
+    
+    return positions[index % positions.length];
+  };
+
   return (
-    <div className="min-h-screen bg-gray-900 py-8">
-      <div className="container mx-auto px-4">
-        {/* AI 컨트롤러 */}
-        {aiPlayer && <AIPlayer gameId={urlGameId as Id<"games">} playerId={aiPlayer._id} />}
-        
-        <div className="flex gap-8 justify-center items-start">
-          {/* AI 플레이어 미니 화면 */}
-          {aiPlayer && (
-            <div className="mini-game-container">
-              <div className="mb-2">
-                <h2 className="text-lg text-white font-bold">
-                  {aiPlayer.playerName} (AI)
-                </h2>
+    <div className="fixed inset-0 bg-gradient-to-b from-[#1a1a2e] to-[#16213e] overflow-hidden">
+      <div className="relative w-full h-full">
+        {/* AI 모드일 때 좌우 분할 레이아웃 */}
+        {isAIGame ? (
+          <div className="flex w-full h-full">
+            {/* AI 플레이어 - 좌측 */}
+            <div className="w-1/2 h-full flex items-center justify-center relative">
+              {aiPlayer && (
+                <>
+                  <div className="hidden">
+                    <AIPlayer 
+                      gameId={gameId as Id<"games">} 
+                      playerId={aiPlayer._id} 
+                    />
+                  </div>
+                  <GameScreen
+                    gameId={gameId as Id<"games">}
+                    playerId={aiPlayer._id}
+                    isMinimized={false}
+                  />
+                </>
+              )}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/50 text-xl font-mono">
+                AI Player
               </div>
-              <div className="mini-game-board">
-                <GameScreen 
-                  gameId={urlGameId as Id<"games">} 
-                  playerId={aiPlayer._id}
+            </div>
+
+            {/* 사람 플레이어 - 우측 */}
+            <div className="w-1/2 h-full flex items-center justify-center relative">
+              {currentPlayer && (
+                <>
+                  <GameScreen
+                    gameId={gameId as Id<"games">}
+                    playerId={currentPlayer._id}
+                    isMinimized={false}
+                  />
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 text-white/50 text-xl font-mono">
+                    Human Player
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : game.mode === 'multi' ? (
+          // 멀티플레이어 레이아웃
+          <>
+            {/* 현재 플레이어의 게임 화면 - 중앙 배치 */}
+            {currentPlayer && (
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                <GameScreen
+                  gameId={gameId as Id<"games">}
+                  playerId={currentPlayer._id}
+                  isMinimized={false}
+                />
+              </div>
+            )}
+
+            {/* 다른 플레이어들의 게임 화면 - 주변 배치 */}
+            {otherPlayers.map((player, index) => (
+              <div
+                key={player._id}
+                className={`absolute ${getRandomPosition(index)} transform scale-50 opacity-60 transition-all duration-500 hover:opacity-90 hover:scale-[0.6] z-0 hover:z-20`}
+                style={{
+                  filter: 'blur(0.5px)',
+                }}
+              >
+                <GameScreen
+                  gameId={gameId as Id<"games">}
+                  playerId={player._id}
                   isMinimized={true}
                 />
               </div>
-            </div>
-          )}
-
-          {/* 메인 플레이어 화면 */}
-          <div className="main-game-container">
-            <div className="mb-4">
-              <h2 className="text-2xl text-white font-bold">
-                {humanPlayer?.playerName} (You)
-              </h2>
-            </div>
-            <div className="main-game-board">
-              <GameScreen 
-                gameId={urlGameId as Id<"games">} 
-                playerId={playerId}
+            ))}
+          </>
+        ) : (
+          // 솔로 모드 레이아웃 - 화면 중앙에 하나만 표시
+          <div className="w-full h-full flex items-center justify-center">
+            {currentPlayer && (
+              <GameScreen
+                gameId={gameId as Id<"games">}
+                playerId={currentPlayer._id}
                 isMinimized={false}
               />
-            </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

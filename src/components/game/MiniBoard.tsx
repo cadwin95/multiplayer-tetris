@@ -1,25 +1,34 @@
 import { Piece, PIECE_ROTATIONS, PIECE_COLORS } from '../../../convex/schema';
 
-interface MiniBoardProps {
+export interface MiniBoardProps {
   board: string;
   currentPiece?: Piece;
+  boardSize: {
+    width: number;
+    height: number;
+  };
 }
 
-export function MiniBoard({ board, currentPiece }: MiniBoardProps) {
-  const boardMatrix = Array(20).fill(null).map((_, i) => 
-    board.slice(i * 10, (i + 1) * 10).split('').map(Number)
+export function MiniBoard({ board, currentPiece, boardSize }: MiniBoardProps) {
+  const boardMatrix = Array(boardSize.height).fill(null).map((_, i) => 
+    board.slice(i * boardSize.width, (i + 1) * boardSize.width).split('').map(Number)
   );
 
   // 현재 피스 그리기
   if (currentPiece) {
     const pieceMatrix = PIECE_ROTATIONS[currentPiece.type][currentPiece.rotation];
+    
+    // 피스를 중앙에 배치하기 위한 오프셋 계산
+    const offsetX = Math.floor((boardSize.width - pieceMatrix[0].length) / 2);
+    const offsetY = Math.floor((boardSize.height - pieceMatrix.length) / 2);
+
     for (let y = 0; y < pieceMatrix.length; y++) {
       for (let x = 0; x < pieceMatrix[y].length; x++) {
         if (pieceMatrix[y][x]) {
-          const boardY = currentPiece.position.y + y;
-          const boardX = currentPiece.position.x + x;
-          if (boardY >= 0 && boardY < 20 && boardX >= 0 && boardX < 10) {
-            boardMatrix[boardY][boardX] = 2;  // 2는 현재 피스를 나타냄
+          const boardY = offsetY + y;
+          const boardX = offsetX + x;
+          if (boardY >= 0 && boardY < boardSize.height && boardX >= 0 && boardX < boardSize.width) {
+            boardMatrix[boardY][boardX] = 2;
           }
         }
       }
@@ -27,19 +36,25 @@ export function MiniBoard({ board, currentPiece }: MiniBoardProps) {
   }
 
   return (
-    <div className="grid grid-cols-10 gap-px bg-gray-700 p-px">
+    <div 
+      className="grid gap-[1px] bg-black/30 p-[1px] rounded-sm"
+      style={{
+        gridTemplateColumns: `repeat(${boardSize.width}, minmax(0, 1fr))`
+      }}
+    >
       {boardMatrix.flat().map((cell, i) => (
         <div
           key={i}
-          className={`aspect-square ${
-            cell === 0 ? 'bg-gray-900' : 'bg-blue-500'
-          }`}
+          className="aspect-square rounded-[1px]"
           style={{
             backgroundColor: cell === 2 && currentPiece 
-              ? PIECE_COLORS[currentPiece.type] 
+              ? `${PIECE_COLORS[currentPiece.type]}66`
               : cell === 1 
-                ? '#4A5568' 
-                : '#1A202C'
+                ? '#4A556855' 
+                : '#1A202C22',
+            boxShadow: cell === 2 && currentPiece
+              ? `0 0 12px ${PIECE_COLORS[currentPiece.type]}99`
+              : 'none'
           }}
         />
       ))}

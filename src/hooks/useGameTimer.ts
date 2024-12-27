@@ -9,11 +9,9 @@ export function useGameTimer(
   useEffect(() => {
     if (!isEnabled) return;
 
-    const interval = setInterval(
-      onTick,
-      Math.max(100, 1000 - (level * 100))
-    );
+    const dropSpeed = Math.max(50, 800 - (level * 50));
 
+    const interval = setInterval(onTick, dropSpeed);
     return () => clearInterval(interval);
   }, [isEnabled, level, onTick]);
 }

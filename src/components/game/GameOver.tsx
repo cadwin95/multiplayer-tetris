@@ -7,9 +7,10 @@ interface GameOverProps {
   score: number;
   winnerId?: Id<"players">;
   playerId: Id<"players">;
+  onPlayAgain: () => void;
 }
 
-export function GameOver({ score, winnerId, playerId }: GameOverProps) {
+export function GameOver({ score, winnerId, playerId, onPlayAgain }: GameOverProps) {
   const navigate = useNavigate();
   const createPlayer = useMutation(api.games.createPlayer);
 
@@ -26,7 +27,7 @@ export function GameOver({ score, winnerId, playerId }: GameOverProps) {
         localStorage.setItem('playerId', newPlayerId);
       }
 
-      window.location.href = '/';
+      onPlayAgain();
     } catch (error) {
       console.error('Failed to restart game:', error);
       navigate('/', { replace: true });
@@ -36,7 +37,7 @@ export function GameOver({ score, winnerId, playerId }: GameOverProps) {
   const isWinner = winnerId === playerId;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+    <div className="h-full flex items-center justify-center bg-black/80">
       <div className="bg-gray-800 p-8 rounded-lg text-center">
         <h2 className={`text-4xl mb-4 ${isWinner ? 'text-green-500' : 'text-red-500'}`}>
           {isWinner ? 'You Won!' : 'Game Over'}

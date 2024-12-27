@@ -67,3 +67,4 @@ runs/
 # Data files
 ai/data/*.npy
 data.zip
+.env.local

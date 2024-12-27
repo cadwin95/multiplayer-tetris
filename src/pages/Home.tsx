@@ -1,10 +1,11 @@
 // src/pages/Home.tsx
-import { Link } from 'react-router-dom';
 import { NicknameInput } from '../components/auth/NicknameInput';
 import '../styles/tetris.css';
 import { useState, useEffect } from 'react';
+import { useGameCreation } from '../hooks/useGameCreation';
 
 export default function Home() {
+  const { startGame } = useGameCreation();
   const [hasNickname, setHasNickname] = useState(false);
 
   useEffect(() => {
@@ -39,24 +40,24 @@ export default function Home() {
           </p>
         </div>
         <div className="grid gap-4">
-          <Link 
-            to="/solo" 
+          <button 
+            onClick={() => startGame('solo')} 
             className="menu-button bg-blue-500 hover:bg-blue-600"
           >
             Solo Play
-          </Link>
-          <Link 
-            to="/ai" 
+          </button>
+          <button 
+            onClick={() => startGame('ai')} 
             className="menu-button bg-green-500 hover:bg-green-600"
           >
             Play vs AI
-          </Link>
-          <Link 
-            to="/multiplayer" 
+          </button>
+          <button 
+            onClick={() => startGame('multi')} 
             className="menu-button bg-purple-500 hover:bg-purple-600"
           >
             Multiplayer
-          </Link>
+          </button>
         </div>
       </div>
     </div>

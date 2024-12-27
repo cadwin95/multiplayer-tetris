@@ -40,7 +40,7 @@ export function AIPlayer({ gameId, playerId }: AIPlayerProps) {
           playerId,
           action
         });
-      }, 300);
+      }, Math.max(50, 300 - (state.level * 20)));
 
       return () => clearInterval(interval);
     }

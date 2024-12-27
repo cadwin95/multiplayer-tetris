@@ -28,6 +28,12 @@ interface GameStateHook {
   isLoading: boolean;
 }
 
+// GameAction 결과 타입 정의 추가
+interface GameActionResult {
+  clearedLines: number;
+  success: boolean;
+}
+
 export function useGameState(gameId: Id<"games">, playerId: Id<"players">): GameStateHook {
   const player = useQuery(api.games.getPlayer, { playerId });
   const game = useQuery(api.games.getGame, { gameId });
@@ -51,20 +57,25 @@ export function useGameState(gameId: Id<"games">, playerId: Id<"players">): Game
       rotation: 0,
       position: { x: 4, y: 0 }
     } : null,
-    score: player?.score ?? 0,
-    level: player?.level ?? 1,
-    lines: player?.lines ?? 0,
+    score: Math.max(0, player?.score ?? 0),
+    level: Math.max(1, player?.level ?? 1),
+    lines: Math.max(0, player?.lines ?? 0),
     status: game?.status ?? 'waiting'
   };
 
   const move = async (direction: DirectionType) => {
     try {
       setError(null);
-      await handleGameAction({
+      const result = (await handleGameAction({
         gameId,
         playerId,
         action: direction
-      });
+      }) as unknown) as GameActionResult;  // unknown을 통해 안전하게 타입 변환
+
+      if (result?.clearedLines > 0) {
+        // 서버에서 자동으로 점수가 업데이트되므로,
+        // 여기서는 추가 작업이 필요 없음
+      }
     } catch (error) {
       console.error('Move failed:', error);
       setError(error instanceof Error ? error : new Error('Unknown error'));
